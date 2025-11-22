@@ -30,6 +30,7 @@ import { db } from '../../firebaseConfig';
 import Toast from 'react-native-toast-message';
 import { FontAwesome5, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { colors, globalStyles } from '../styles/globalStyles';
 
 const { width, height } = Dimensions.get('window');
 
@@ -468,14 +469,14 @@ const CreateUserScreen = () => {
       >
         {/* Header de la tarjeta */}
         <LinearGradient
-          colors={isAdmin ? ['#667eea', '#764ba2'] : ['#4CAF50', '#45a049']}
+          colors={isAdmin ? colors.gradientSecondary : colors.gradientSuccess}
           style={styles.cardHeader}
         >
           <View style={styles.cardAvatar}>
             <FontAwesome5 
               name={isAdmin ? "user-cog" : "user"} 
               size={20} 
-              color="#fff" 
+              color={colors.textInverse} 
             />
           </View>
           <View style={styles.cardStatus}>
@@ -500,20 +501,20 @@ const CreateUserScreen = () => {
           
           <View style={styles.cardDetails}>
             <View style={styles.detailItem}>
-              <FontAwesome5 name="id-card" size={12} color="#666" />
+              <FontAwesome5 name="id-card" size={12} color={colors.textSecondary} />
               <Text style={styles.detailText} numberOfLines={1}>
                 {item.cedula || 'N/A'}
               </Text>
             </View>
             <View style={styles.detailItem}>
-              <FontAwesome5 name="phone" size={12} color="#666" />
+              <FontAwesome5 name="phone" size={12} color={colors.textSecondary} />
               <Text style={styles.detailText} numberOfLines={1}>
                 {item.telefono || 'N/A'}
               </Text>
             </View>
             {!isAdmin && (
               <View style={styles.detailItem}>
-                <FontAwesome5 name="map-marker-alt" size={12} color="#666" />
+                <FontAwesome5 name="map-marker-alt" size={12} color={colors.textSecondary} />
                 <Text style={styles.detailText} numberOfLines={1}>
                   {item.direccion || 'N/A'}
                 </Text>
@@ -539,7 +540,7 @@ const CreateUserScreen = () => {
               style={[styles.gridActionButton, styles.modifyButton]} 
               onPress={handleModify}
             >
-              <FontAwesome5 name="edit" size={14} color="#fff" />
+              <FontAwesome5 name="edit" size={14} color={colors.textInverse} />
             </TouchableOpacity>
 
             {item.activo ? (
@@ -547,14 +548,14 @@ const CreateUserScreen = () => {
                 style={[styles.gridActionButton, styles.deactivateButton]} 
                 onPress={handleDeactivate}
               >
-                <FontAwesome5 name="power-off" size={14} color="#fff" />
+                <FontAwesome5 name="power-off" size={14} color={colors.textInverse} />
               </TouchableOpacity>
             ) : (
               <TouchableOpacity 
                 style={[styles.gridActionButton, styles.activateButton]} 
                 onPress={handleActivate}
               >
-                <FontAwesome5 name="check-circle" size={14} color="#fff" />
+                <FontAwesome5 name="check-circle" size={14} color={colors.textInverse} />
               </TouchableOpacity>
             )}
 
@@ -562,7 +563,7 @@ const CreateUserScreen = () => {
               style={[styles.gridActionButton, styles.deleteButton]} 
               onPress={handleDelete}
             >
-              <FontAwesome5 name="trash" size={14} color="#fff" />
+              <FontAwesome5 name="trash" size={14} color={colors.textInverse} />
             </TouchableOpacity>
           </Animated.View>
         )}
@@ -580,7 +581,7 @@ const CreateUserScreen = () => {
           <FontAwesome5 
             name={searchQuery ? "search" : "users"} 
             size={60} 
-            color="#ccc" 
+            color={colors.border} 
           />
           <Text style={styles.emptyGridText}>
             {searchQuery 
@@ -627,18 +628,18 @@ const CreateUserScreen = () => {
     return (
       <Animated.View style={[styles.editFormContainer, { transform: [{ translateY: slideAnim }] }]}>
         <LinearGradient
-          colors={['#667eea', '#764ba2']}
+          colors={colors.gradientSecondary}
           style={styles.editFormHeader}
         >
           <Text style={styles.editFormTitle}>✏️ Editar Información</Text>
           <TouchableOpacity onPress={() => setShowEditForm(false)}>
-            <FontAwesome5 name="times" size={20} color="#fff" />
+            <FontAwesome5 name="times" size={20} color={colors.textInverse} />
           </TouchableOpacity>
         </LinearGradient>
         
         <View style={styles.editFormContent}>
           <View style={styles.inputGroup}>
-            <FontAwesome5 name="user" size={16} color="#667eea" style={styles.inputIcon} />
+            <FontAwesome5 name="user" size={16} color={colors.secondary} style={styles.inputIcon} />
             <TextInput
               style={styles.input}
               placeholder="Nombre completo"
@@ -648,7 +649,7 @@ const CreateUserScreen = () => {
           </View>
           
           <View style={styles.inputGroup}>
-            <FontAwesome5 name="phone" size={16} color="#667eea" style={styles.inputIcon} />
+            <FontAwesome5 name="phone" size={16} color={colors.secondary} style={styles.inputIcon} />
             <TextInput
               style={styles.input}
               placeholder="Teléfono"
@@ -659,7 +660,7 @@ const CreateUserScreen = () => {
           </View>
           
           <View style={styles.inputGroup}>
-            <FontAwesome5 name="map-marker-alt" size={16} color="#667eea" style={styles.inputIcon} />
+            <FontAwesome5 name="map-marker-alt" size={16} color={colors.secondary} style={styles.inputIcon} />
             <TextInput
               style={styles.input}
               placeholder="Dirección"
@@ -689,7 +690,7 @@ const CreateUserScreen = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar backgroundColor="#1e90ff" barStyle="light-content" />
+      <StatusBar backgroundColor={colors.secondaryDark} barStyle="light-content" />
       
       <ScrollView 
         style={styles.scrollView}
@@ -698,14 +699,14 @@ const CreateUserScreen = () => {
       >
         {/* Header DENTRO del ScrollView */}
         <LinearGradient
-          colors={['#667eea', '#764ba2']}
+          colors={colors.gradientSecondary}
           style={styles.header}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         >
           <View style={styles.headerContent}>
             <View style={styles.headerTitleContainer}>
-              <FontAwesome5 name="users-cog" size={24} color="#fff" />
+              <FontAwesome5 name="users-cog" size={24} color={colors.textInverse} />
               <Text style={styles.headerTitle}>Gestión de Usuarios</Text>
             </View>
             <View style={styles.statsContainer}>
@@ -730,7 +731,7 @@ const CreateUserScreen = () => {
           {/* Barra de búsqueda */}
           <View style={styles.searchContainer}>
             <View style={styles.searchInputContainer}>
-              <FontAwesome5 name="search" size={16} color="#666" style={styles.searchIcon} />
+              <FontAwesome5 name="search" size={16} color={colors.textSecondary} style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Buscar por nombre, cédula, email..."
@@ -738,8 +739,8 @@ const CreateUserScreen = () => {
                 onChangeText={setSearchQuery}
               />
               {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <FontAwesome5 name="times" size={16} color="#666" />
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <FontAwesome5 name="times" size={16} color={colors.textSecondary} />
                 </TouchableOpacity>
               )}
             </View>
@@ -754,7 +755,7 @@ const CreateUserScreen = () => {
               <FontAwesome5 
                 name="users" 
                 size={16} 
-                color={activeTab === 'todos' ? '#fff' : '#667eea'} 
+                color={activeTab === 'todos' ? colors.textInverse : colors.secondary} 
               />
               <Text style={[styles.tabText, activeTab === 'todos' && styles.tabTextActive]}>
                 Todos ({listaUsuarios.length + listaClientes.length})
@@ -768,7 +769,7 @@ const CreateUserScreen = () => {
               <FontAwesome5 
                 name="user-cog" 
                 size={16} 
-                color={activeTab === 'admins' ? '#fff' : '#667eea'} 
+                color={activeTab === 'admins' ? colors.textInverse : colors.secondary} 
               />
               <Text style={[styles.tabText, activeTab === 'admins' && styles.tabTextActive]}>
                 Admins ({listaUsuarios.length})
@@ -782,7 +783,7 @@ const CreateUserScreen = () => {
               <FontAwesome5 
                 name="user" 
                 size={16} 
-                color={activeTab === 'clientes' ? '#fff' : '#667eea'} 
+                color={activeTab === 'clientes' ? colors.textInverse : colors.secondary} 
               />
               <Text style={[styles.tabText, activeTab === 'clientes' && styles.tabTextActive]}>
                 Clientes ({listaClientes.length})
@@ -800,10 +801,10 @@ const CreateUserScreen = () => {
             }}
           >
             <LinearGradient
-              colors={['#4CAF50', '#45a049']}
+              colors={colors.gradientSuccess}
               style={styles.mainActionGradient}
             >
-              <FontAwesome5 name={showForm ? "times" : "user-plus"} size={20} color="#fff" />
+              <FontAwesome5 name={showForm ? "times" : "user-plus"} size={20} color={colors.textInverse} />
               <Text style={styles.mainActionText}>
                 {showForm ? 'Cancelar' : 'Nuevo Usuario'}
               </Text>
@@ -822,7 +823,7 @@ const CreateUserScreen = () => {
           >
             {showForm && (
               <LinearGradient
-                colors={['#f8f9fa', '#e9ecef']}
+                colors={[colors.surface, colors.background]}
                 style={styles.formGradient}
               >
                 <Text style={styles.formTitle}>
@@ -831,7 +832,7 @@ const CreateUserScreen = () => {
 
                 <View style={styles.formGrid}>
                   <View style={styles.inputGroup}>
-                    <FontAwesome5 name="user" size={16} color="#667eea" style={styles.inputIcon} />
+                    <FontAwesome5 name="user" size={16} color={colors.secondary} style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
                       placeholder="Nombre completo"
@@ -841,7 +842,7 @@ const CreateUserScreen = () => {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <FontAwesome5 name="id-card" size={16} color="#667eea" style={styles.inputIcon} />
+                    <FontAwesome5 name="id-card" size={16} color={colors.secondary} style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
                       placeholder="Cédula"
@@ -851,7 +852,7 @@ const CreateUserScreen = () => {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <FontAwesome5 name="envelope" size={16} color="#667eea" style={styles.inputIcon} />
+                    <FontAwesome5 name="envelope" size={16} color={colors.secondary} style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
                       placeholder="Correo electrónico"
@@ -862,7 +863,7 @@ const CreateUserScreen = () => {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <FontAwesome5 name="phone" size={16} color="#667eea" style={styles.inputIcon} />
+                    <FontAwesome5 name="phone" size={16} color={colors.secondary} style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
                       placeholder="Teléfono"
@@ -873,7 +874,7 @@ const CreateUserScreen = () => {
                   </View>
 
                   <View style={[styles.inputGroup, styles.fullWidth]}>
-                    <FontAwesome5 name="map-marker-alt" size={16} color="#667eea" style={styles.inputIcon} />
+                    <FontAwesome5 name="map-marker-alt" size={16} color={colors.secondary} style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
                       placeholder="Dirección completa"
@@ -883,7 +884,7 @@ const CreateUserScreen = () => {
                   </View>
 
                   <View style={[styles.inputGroup, styles.fullWidth]}>
-                    <FontAwesome5 name="lock" size={16} color="#667eea" style={styles.inputIcon} />
+                    <FontAwesome5 name="lock" size={16} color={colors.secondary} style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
                       placeholder="Contraseña"
@@ -908,7 +909,7 @@ const CreateUserScreen = () => {
                       <FontAwesome5 
                         name="user-cog" 
                         size={16} 
-                        color={tipo === 'usuario' ? '#fff' : '#667eea'} 
+                        color={tipo === 'usuario' ? colors.textInverse : colors.secondary} 
                       />
                       <Text
                         style={[
@@ -930,7 +931,7 @@ const CreateUserScreen = () => {
                       <FontAwesome5 
                         name="user" 
                         size={16} 
-                        color={tipo === 'cliente' ? '#fff' : '#667eea'} 
+                        color={tipo === 'cliente' ? colors.textInverse : colors.secondary} 
                       />
                       <Text
                         style={[
@@ -946,7 +947,7 @@ const CreateUserScreen = () => {
 
                 {loading ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#667eea" />
+                    <ActivityIndicator size="large" color={colors.secondary} />
                     <Text style={styles.loadingText}>Creando usuario...</Text>
                   </View>
                 ) : (
@@ -955,10 +956,10 @@ const CreateUserScreen = () => {
                     onPress={handleCreate}
                   >
                     <LinearGradient
-                      colors={['#667eea', '#764ba2']}
+                      colors={colors.gradientSecondary}
                       style={styles.createButtonGradient}
                     >
-                      <FontAwesome5 name="save" size={18} color="#fff" />
+                      <FontAwesome5 name="save" size={18} color={colors.textInverse} />
                       <Text style={styles.createButtonText}>Crear Usuario</Text>
                     </LinearGradient>
                   </TouchableOpacity>
@@ -984,10 +985,10 @@ const CreateUserScreen = () => {
         onPress={handleReport}
       >
         <LinearGradient
-          colors={['#FF9800', '#F57C00']}
+          colors={[colors.warning, colors.warning]}
           style={styles.fabGradient}
         >
-          <FontAwesome5 name="file-alt" size={20} color="#fff" />
+          <FontAwesome5 name="file-alt" size={20} color={colors.textInverse} />
         </LinearGradient>
       </TouchableOpacity>
 
@@ -1000,7 +1001,7 @@ const CreateUserScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: colors.surface,
   },
   scrollView: {
     flex: 1,
@@ -1038,7 +1039,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.textInverse,
     marginLeft: 10,
   },
   statsContainer: {
@@ -1051,7 +1052,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.textInverse,
   },
   statLabel: {
     fontSize: 12,
@@ -1064,7 +1065,7 @@ const styles = StyleSheet.create({
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     paddingHorizontal: 15,
     paddingVertical: 12,
@@ -1080,12 +1081,12 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: colors.textPrimary,
   },
   tabsContainer: {
     flexDirection: 'row',
     marginBottom: 20,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 5,
     elevation: 2,
@@ -1105,16 +1106,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
   },
   tabActive: {
-    backgroundColor: '#667eea',
+    backgroundColor: colors.secondary,
   },
   tabText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#667eea',
+    color: colors.secondary,
     marginLeft: 5,
   },
   tabTextActive: {
-    color: '#fff',
+    color: colors.textInverse,
   },
   mainActionButton: {
     marginBottom: 20,
@@ -1134,7 +1135,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   mainActionText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 10,
@@ -1154,7 +1155,7 @@ const styles = StyleSheet.create({
   formTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -1168,11 +1169,11 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 10,
     paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: colors.border,
   },
   fullWidth: {
     width: '100%',
@@ -1184,7 +1185,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#333',
+    color: colors.textPrimary,
   },
   tipoContainer: {
     marginVertical: 15,
@@ -1192,7 +1193,7 @@ const styles = StyleSheet.create({
   tipoLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 10,
   },
   tipoButtons: {
@@ -1208,17 +1209,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#667eea',
+    borderColor: colors.secondary,
     marginHorizontal: 5,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
   },
   tipoButtonSelected: {
-    backgroundColor: '#667eea',
+    backgroundColor: colors.secondary,
   },
   tipoButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#667eea',
+    color: colors.secondary,
     marginLeft: 6,
   },
   tipoButtonTextSelected: {
@@ -1230,7 +1231,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 8,
-    color: '#666',
+    color: colors.textSecondary,
     fontSize: 12,
   },
   createButton: {
@@ -1245,7 +1246,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   createButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 14,
     fontWeight: 'bold',
     marginLeft: 8,
@@ -1260,7 +1261,7 @@ const styles = StyleSheet.create({
   },
   userGridCard: {
     width: (width - 45) / 2,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 15,
     overflow: 'hidden',
     elevation: 3,
@@ -1272,7 +1273,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   userGridCardSelected: {
-    borderColor: '#667eea',
+    borderColor: colors.secondary,
     elevation: 5,
   },
   userGridCardInactive: {
@@ -1303,14 +1304,14 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   statusActive: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
   },
   statusInactive: {
-    backgroundColor: '#F44336',
+    backgroundColor: colors.error,
   },
   statusText: {
     fontSize: 10,
-    color: '#fff',
+    color: colors.textInverse,
     fontWeight: '600',
   },
   cardContent: {
@@ -1319,12 +1320,12 @@ const styles = StyleSheet.create({
   cardName: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   cardEmail: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 8,
   },
   cardDetails: {
@@ -1337,7 +1338,7 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 10,
-    color: '#666',
+    color: colors.textSecondary,
     marginLeft: 6,
     flex: 1,
   },
@@ -1348,20 +1349,20 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   typeBadgeAdmin: {
-    backgroundColor: '#E3F2FD',
+    backgroundColor: colors.grayShades[50],
   },
   typeBadgeClient: {
-    backgroundColor: '#E8F5E8',
+    backgroundColor: colors.primaryShades[50],
   },
   typeBadgeText: {
     fontSize: 8,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
   },
   gridActions: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: colors.borderLight,
     padding: 8,
   },
   gridActionButton: {
@@ -1373,22 +1374,22 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   modifyButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: colors.secondary,
   },
   deactivateButton: {
-    backgroundColor: '#FF9800',
+    backgroundColor: colors.warning,
   },
   activateButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
   },
   deleteButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: colors.error,
   },
   emptyGridState: {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 15,
     elevation: 2,
     shadowColor: '#000',
@@ -1407,16 +1408,16 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#667eea',
+    backgroundColor: colors.secondary,
     borderRadius: 8,
   },
   clearSearchText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 12,
     fontWeight: '600',
   },
   editFormContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 15,
     marginBottom: 20,
     elevation: 5,
@@ -1433,7 +1434,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   editFormTitle: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -1453,20 +1454,20 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   cancelEditButton: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#dee2e6',
+    borderColor: colors.border,
   },
   saveEditButton: {
-    backgroundColor: '#667eea',
+    backgroundColor: colors.secondary,
   },
   cancelEditButtonText: {
-    color: '#666',
+    color: colors.textSecondary,
     fontWeight: '600',
     fontSize: 12,
   },
   saveEditButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontWeight: '600',
     fontSize: 12,
   },

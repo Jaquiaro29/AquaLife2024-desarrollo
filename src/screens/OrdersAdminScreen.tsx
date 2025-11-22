@@ -408,7 +408,7 @@ const OrdersAdminScreen = () => {
                   style={[styles.button, styles.buttonListo]}
                   onPress={() => handleChangeEstado(pedido.id, 'listo')}
                 >
-                  <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                  <Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} />
                   <Text style={styles.buttonText}>Marcar como Listo</Text>
                 </TouchableOpacity>
               )}
@@ -418,7 +418,7 @@ const OrdersAdminScreen = () => {
                     style={[styles.button, styles.buttonEntregado]}
                     onPress={() => handleChangeEstado(pedido.id, 'entregado')}
                   >
-                    <Ionicons name="checkmark-done-outline" size={18} color="#fff" />
+                    <Ionicons name="checkmark-done-outline" size={18} color={colors.textInverse} />
                     <Text style={styles.buttonText}>Marcar Entregado</Text>
                   </TouchableOpacity>
                   
@@ -469,7 +469,7 @@ const OrdersAdminScreen = () => {
   // Render final
   return (
     <View style={styles.container}>
-      <StatusBar backgroundColor="#667eea" barStyle="light-content" />
+      <StatusBar backgroundColor={colors.secondaryDark} barStyle="light-content" />
       
       <ScrollView 
         style={styles.scrollView}
@@ -478,7 +478,7 @@ const OrdersAdminScreen = () => {
       >
         {/* Header DENTRO del ScrollView */}
         <LinearGradient
-          colors={['#667eea', '#764ba2']}
+          colors={colors.gradientSecondary}
           style={styles.header}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
@@ -490,13 +490,13 @@ const OrdersAdminScreen = () => {
           <View style={styles.inventoryAlert}>
             {sellosCantidad < 200 && (
               <View style={styles.alertItem}>
-                <Ionicons name="warning" size={16} color="#fff" />
+                <Ionicons name="warning" size={16} color={colors.textInverse} />
                 <Text style={styles.alertText}>Sellos: {sellosCantidad}</Text>
               </View>
             )}
             {tapasCantidad < 200 && (
               <View style={styles.alertItem}>
-                <Ionicons name="warning" size={16} color="#fff" />
+                <Ionicons name="warning" size={16} color={colors.textInverse} />
                 <Text style={styles.alertText}>Tapas: {tapasCantidad}</Text>
               </View>
             )}
@@ -512,7 +512,7 @@ const OrdersAdminScreen = () => {
             style={styles.statsContainer}
           >
             <LinearGradient
-              colors={['#667eea', '#764ba2']}
+              colors={colors.gradientSecondary}
               style={styles.statCard}
             >
               <Text style={styles.statNumber}>{stats.total}</Text>
@@ -520,7 +520,7 @@ const OrdersAdminScreen = () => {
             </LinearGradient>
             
             <LinearGradient
-              colors={['#FF9800', '#F57C00']}
+              colors={[colors.warning, '#D97706']}
               style={styles.statCard}
             >
               <Text style={styles.statNumber}>{stats.pendientes}</Text>
@@ -528,7 +528,7 @@ const OrdersAdminScreen = () => {
             </LinearGradient>
             
             <LinearGradient
-              colors={['#4CAF50', '#45a049']}
+              colors={colors.gradientSuccess}
               style={styles.statCard}
             >
               <Text style={styles.statNumber}>{stats.listos}</Text>
@@ -536,7 +536,7 @@ const OrdersAdminScreen = () => {
             </LinearGradient>
             
             <LinearGradient
-              colors={['#9C27B0', '#7B1FA2']}
+              colors={[colors.error, '#DC2626']}
               style={styles.statCard}
             >
               <Text style={styles.statNumber}>{stats.entregados}</Text>
@@ -671,7 +671,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.textInverse,
     marginBottom: 4,
   },
   headerSubtitle: {
@@ -692,7 +692,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   alertText: {
-    color: '#fff',
+    color: colors.textInverse,
     marginLeft: 6,
     fontSize: 14,
     fontWeight: '500',
@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.textInverse,
     marginBottom: 4,
   },
   statLabel: {
@@ -762,7 +762,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   filterButtonActive: {
-    backgroundColor: '#667eea',
+    backgroundColor: colors.secondary,
   },
   filterButtonText: {
     fontSize: 14,
@@ -770,7 +770,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   filterButtonTextActive: {
-    color: '#fff',
+    color: colors.textInverse,
   },
   listContent: {
     paddingBottom: 20,
@@ -781,12 +781,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginVertical: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#667eea',
+    borderLeftColor: colors.secondary,
   },
   headerTextFecha: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#667eea',
+    color: colors.secondary,
   },
   card: {
     backgroundColor: colors.background,
@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
   estadoBadgeText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.textInverse,
   },
   cardBody: {
     padding: 16,
@@ -865,10 +865,10 @@ const styles = StyleSheet.create({
   quantityValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#667eea',
+    color: colors.secondary,
   },
   totalQuantity: {
-    color: '#4CAF50',
+    color: colors.success,
   },
   footerRow: {
     flexDirection: 'row',
@@ -889,7 +889,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: colors.success,
   },
   observacionesContainer: {
     flexDirection: 'row',
@@ -903,7 +903,7 @@ const styles = StyleSheet.create({
   },
   observacionesText: {
     fontSize: 12,
-    color: '#92400e',
+    color: colors.warning,
     marginLeft: 6,
     flex: 1,
   },
@@ -924,13 +924,13 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   buttonListo: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.success,
   },
   buttonEntregado: {
-    backgroundColor: '#9C27B0',
+    backgroundColor: colors.secondaryDark,
   },
   buttonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontWeight: '600',
     fontSize: 15,
   },
@@ -959,7 +959,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   tooltipText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 16,
@@ -976,7 +976,7 @@ const styles = StyleSheet.create({
   },
   infoMessageText: {
     fontSize: 13,
-    color: '#92400e',
+    color: colors.warning,
     fontWeight: '500',
     flex: 1,
   },

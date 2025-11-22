@@ -13,6 +13,7 @@ import {
 import { auth, db } from '../../firebaseConfig';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { formatCurrency } from '../utils/currency';
+import { colors, globalStyles } from '../styles/globalStyles';
 
 // Interfaces y Tipos
 interface Pedido {
@@ -132,16 +133,16 @@ const PedidosScreen = () => {
   const getEstadoStyles = (estado: string) => {
     switch (estado.toLowerCase()) {
       case 'pendiente':
-        return { backgroundColor: '#fef3c7', color: '#d97706', icon: '⏳' };
+        return { backgroundStyle: globalStyles.badgeWarning, color: colors.warning, icon: '⏳' };
       case 'procesando':
-        return { backgroundColor: '#dbeafe', color: '#1d4ed8', icon: '🔄' };
+        return { backgroundStyle: globalStyles.badgeInfo, color: colors.secondaryDark, icon: '🔄' };
       case 'listo':
-        return { backgroundColor: '#dcfce7', color: '#16a34a', icon: '✅' };
+        return { backgroundStyle: globalStyles.badgeSuccess, color: colors.success, icon: '✅' };
       case 'entregado':
       case 'completado':
-        return { backgroundColor: '#f3e8ff', color: '#9333ea', icon: '🎉' };
+        return { backgroundStyle: globalStyles.badgeInfo, color: colors.secondaryDark, icon: '🎉' };
       default:
-        return { backgroundColor: '#f3f4f6', color: '#6b7280', icon: '📦' };
+        return { backgroundStyle: { backgroundColor: colors.grayShades[50] }, color: colors.textSecondary, icon: '📦' };
     }
   };
 
@@ -165,7 +166,7 @@ const PedidosScreen = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+        <ActivityIndicator size="large" color={colors.secondary} />
         <Text style={styles.loadingText}>Cargando tus pedidos...</Text>
       </View>
     );
@@ -175,10 +176,10 @@ const PedidosScreen = () => {
     <ScrollView
       style={styles.container}
       refreshControl={
-        <RefreshControl
+          <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          colors={["#3b82f6"]}
+          colors={[colors.secondary]}
         />
       }
       showsVerticalScrollIndicator={false}
@@ -352,7 +353,7 @@ const PedidosScreen = () => {
                       {formatFecha(pedido.fecha)} • {formatHora(pedido.hora)}
                     </Text>
                   </View>
-                  <View style={[styles.estadoBadge, { backgroundColor: estadoStyles.backgroundColor }]}> 
+                  <View style={[styles.estadoBadge, estadoStyles.backgroundStyle]}> 
                     <Text style={[styles.estadoText, { color: estadoStyles.color }]}> 
                       {estadoStyles.icon} {pedido.estado}
                     </Text>
@@ -423,8 +424,8 @@ const PedidosScreen = () => {
                     {(() => {
                       const estadoStyles = getEstadoStyles(selectedPedido.estado);
                       return (
-                        <View style={[styles.estadoModalBadge, { backgroundColor: estadoStyles.backgroundColor }]}>
-                          <Text style={[styles.estadoModalText, { color: estadoStyles.color }]}>
+                        <View style={[styles.estadoModalBadge, estadoStyles.backgroundStyle]}>
+                          <Text style={[styles.estadoModalText, { color: estadoStyles.color }]}> 
                             {estadoStyles.icon} {selectedPedido.estado.toUpperCase()}
                           </Text>
                         </View>
@@ -497,7 +498,7 @@ const PedidosScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.surface,
   },
   // ESTILO CLAVE AÑADIDO:
   scrollContent: {
@@ -507,28 +508,28 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.surface,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   header: {
     padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: colors.border,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 16,
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -541,50 +542,50 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#3b82f6',
+    color: colors.secondary,
   },
   statLabel: {
     fontSize: 12,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginTop: 4,
   },
   filtersContainer: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: colors.border,
   },
   filterButton: {
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 25,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.grayShades[50],
     marginRight: 12,
     flexDirection: 'row',
     maxHeight: 100,
     alignItems: 'center',
   },
   filterButtonActive: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: colors.secondary,
   },
   filterButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   filterButtonTextActive: {
-    color: '#fff',
+    color: colors.textInverse,
   },
   badge: {
-    backgroundColor: '#ef4444',
+    backgroundColor: colors.error,
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
     marginLeft: 6,
   },
   badgeText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 10,
     fontWeight: 'bold',
   },
@@ -593,32 +594,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: colors.border,
   },
   sortLabel: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginRight: 12,
   },
   sortButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.grayShades[50],
     marginRight: 8,
   },
   sortButtonActive: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: colors.secondary,
   },
   sortButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   sortButtonTextActive: {
-    color: '#fff',
+    color: colors.textInverse,
   },
   pedidosList: {
     // Quitamos el flex: 1 y padding de aquí
@@ -637,18 +638,18 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: colors.textPrimary,
     marginBottom: 8,
     textAlign: 'center',
   },
   emptyStateText: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   pedidoCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
@@ -670,12 +671,12 @@ const styles = StyleSheet.create({
   pedidoNumber: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   pedidoDate: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   estadoBadge: {
     paddingHorizontal: 12,
@@ -699,38 +700,38 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 12,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   detailValue: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: colors.textPrimary,
   },
   pedidoFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: colors.borderLight,
     paddingTop: 16,
   },
   totalText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#059669',
+    color: colors.success,
   },
   arrowContainer: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   arrow: {
     fontSize: 16,
-    color: '#64748b',
+    color: colors.textSecondary,
     fontWeight: 'bold',
   },
   // NUEVO ESTILO AÑADIDO:
@@ -745,7 +746,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 20,
     maxHeight: '80%',
     width: '100%',
@@ -757,25 +758,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: colors.borderLight,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: colors.textPrimary,
     flex: 1,
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   closeButtonText: {
     fontSize: 16,
-    color: '#64748b',
+    color: colors.textSecondary,
     fontWeight: 'bold',
   },
   modalBody: {
@@ -787,7 +788,7 @@ const styles = StyleSheet.create({
   modalSectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   modalRow: {
@@ -796,21 +797,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f8fafc',
+    borderBottomColor: colors.surface,
   },
   modalLabel: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   modalValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#1e293b',
+    color: colors.textPrimary,
   },
   modalTotal: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#059669',
+    color: colors.success,
   },
   estadoModalBadge: {
     paddingHorizontal: 16,
@@ -824,7 +825,7 @@ const styles = StyleSheet.create({
   },
   observacionesText: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.textSecondary,
     lineHeight: 20,
     fontStyle: 'italic',
   },

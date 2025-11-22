@@ -28,6 +28,7 @@ import { db } from '../../firebaseConfig';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { colors } from '../styles/globalStyles';
 
 const { width } = Dimensions.get('window');
 
@@ -50,28 +51,6 @@ interface MovimientoDoc {
 interface SelectedItem {
   id: string;
 }
-
-// Paleta de colores actualizada para coincidir con el dashboard
-const colors = {
-  primary: '#667eea',
-  primaryLight: '#7c93ee',
-  primaryDark: '#5a67d8',
-  secondary: '#4CAF50',
-  secondaryLight: '#66bb6a',
-  secondaryDark: '#388e3c',
-  danger: '#e74c3c',
-  dangerLight: '#ec7063',
-  warning: '#f39c12',
-  light: '#ecf0f1',
-  dark: '#2c3e50',
-  gray: '#95a5a6',
-  white: '#ffffff',
-  background: '#f8f9fa',
-  surface: '#ffffff',
-  textPrimary: '#1e293b',
-  textSecondary: '#64748b',
-  textInverse: '#ffffff',
-};
 
 const InventoryScreen = () => {
   // Lista de artículos en Firestore
@@ -283,7 +262,7 @@ const InventoryScreen = () => {
           
           <View style={styles.itemDetails}>
             <View style={styles.categoriaTag}>
-              <Ionicons name="pricetag" size={14} color={colors.white} />
+              <Ionicons name="pricetag" size={14} color={colors.textInverse} />
               <Text style={styles.categoriaText}>{item.categoria}</Text>
             </View>
           </View>
@@ -295,7 +274,7 @@ const InventoryScreen = () => {
             style={[styles.actionButton, styles.editButton]} 
             onPress={() => handleSelectEdit(item)}
           >
-            <Ionicons name="create" size={16} color={colors.white} />
+            <Ionicons name="create" size={16} color={colors.textInverse} />
             <Text style={styles.actionButtonText}>Editar</Text>
           </TouchableOpacity>
           
@@ -306,7 +285,7 @@ const InventoryScreen = () => {
             <Ionicons 
               name={tipoMovimiento === 'entrada' ? 'arrow-down' : 'arrow-up'} 
               size={16} 
-              color={colors.white} 
+              color={colors.textInverse} 
             />
             <Text style={styles.actionButtonText}>Movimiento</Text>
           </TouchableOpacity>
@@ -315,7 +294,7 @@ const InventoryScreen = () => {
             style={[styles.actionButton, styles.deleteButton]} 
             onPress={() => handleDelete(item.id, item.nombre)}
           >
-            <Ionicons name="trash" size={16} color={colors.white} />
+            <Ionicons name="trash" size={16} color={colors.textInverse} />
             <Text style={styles.actionButtonText}>Eliminar</Text>
           </TouchableOpacity>
         </View>
@@ -336,7 +315,7 @@ const InventoryScreen = () => {
             
             {movimientos.length === 0 ? (
               <View style={styles.emptyState}>
-                <Ionicons name="receipt" size={40} color={colors.gray} />
+                <Ionicons name="receipt" size={40} color={colors.textSecondary} />
                 <Text style={styles.emptyStateText}>No hay movimientos registrados</Text>
               </View>
             ) : (
@@ -354,7 +333,7 @@ const InventoryScreen = () => {
                         <Ionicons 
                           name={mov.tipoMovimiento === 'entrada' ? 'arrow-down' : 'arrow-up'} 
                           size={14} 
-                          color={colors.white} 
+                          color={colors.textInverse} 
                         />
                         <Text style={styles.movTypeText}>
                           {mov.tipoMovimiento === 'entrada' ? 'Entrada' : 'Salida'}
@@ -398,7 +377,7 @@ const InventoryScreen = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar backgroundColor="#667eea" barStyle="light-content" />
+      <StatusBar backgroundColor={colors.secondaryDark} barStyle="light-content" />
       
       <ScrollView 
         style={styles.scrollView}
@@ -407,14 +386,14 @@ const InventoryScreen = () => {
       >
         {/* Header DENTRO del ScrollView */}
         <LinearGradient
-          colors={['#667eea', '#764ba2']}
+          colors={colors.gradientSecondary}
           style={styles.header}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         >
           <View style={styles.headerContent}>
             <View style={styles.headerTitleContainer}>
-              <Ionicons name="cube" size={28} color={colors.white} />
+              <Ionicons name="cube" size={28} color={colors.textInverse} />
               <Text style={styles.headerTitle}>Gestión de Inventario</Text>
             </View>
             <TouchableOpacity 
@@ -428,7 +407,7 @@ const InventoryScreen = () => {
                 setShowArticuloModal(true);
               }}
             >
-              <Ionicons name="add" size={20} color={colors.white} />
+              <Ionicons name="add" size={20} color={colors.textInverse} />
               <Text style={styles.addButtonText}>Nuevo Artículo</Text>
             </TouchableOpacity>
           </View>
@@ -443,7 +422,7 @@ const InventoryScreen = () => {
             style={styles.statsContainer}
           >
             <LinearGradient
-              colors={['#667eea', '#764ba2']}
+              colors={colors.gradientSecondary}
               style={styles.statCard}
             >
               <Text style={styles.statNumber}>{articulos.length}</Text>
@@ -451,7 +430,7 @@ const InventoryScreen = () => {
             </LinearGradient>
             
             <LinearGradient
-              colors={['#FF9800', '#F57C00']}
+              colors={[colors.warning, '#D97706']}
               style={styles.statCard}
             >
               <Text style={styles.statNumber}>
@@ -461,7 +440,7 @@ const InventoryScreen = () => {
             </LinearGradient>
             
             <LinearGradient
-              colors={['#4CAF50', '#45a049']}
+              colors={colors.gradientSuccess}
               style={styles.statCard}
             >
               <Text style={styles.statNumber}>
@@ -515,7 +494,7 @@ const InventoryScreen = () => {
           {/* Lista principal de artículos */}
           {filteredArticulos.length === 0 ? (
             <View style={styles.emptyInventory}>
-              <Ionicons name="cube" size={60} color={colors.gray} />
+                <Ionicons name="cube" size={60} color={colors.textSecondary} />
               <Text style={styles.emptyInventoryTitle}>No hay artículos</Text>
               <Text style={styles.emptyInventoryText}>
                 {searchQuery || filterCategoria 
@@ -569,7 +548,7 @@ const InventoryScreen = () => {
                 style={styles.closeButton}
                 onPress={() => setShowArticuloModal(false)}
               >
-                <Ionicons name="close" size={24} color={colors.dark} />
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
             
@@ -653,7 +632,7 @@ const InventoryScreen = () => {
                 style={styles.closeButton}
                 onPress={() => setShowMovimientoModal(false)}
               >
-                <Ionicons name="close" size={24} color={colors.dark} />
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
             
@@ -669,7 +648,7 @@ const InventoryScreen = () => {
                   <Ionicons 
                     name="arrow-down" 
                     size={20} 
-                    color={tipoMovimiento === 'entrada' ? colors.white : colors.secondary} 
+                    color={tipoMovimiento === 'entrada' ? colors.textInverse : colors.secondary}
                   />
                   <Text
                     style={[
@@ -690,7 +669,7 @@ const InventoryScreen = () => {
                   <Ionicons 
                     name="arrow-up" 
                     size={20} 
-                    color={tipoMovimiento === 'salida' ? colors.white : colors.danger} 
+                    color={tipoMovimiento === 'salida' ? colors.textInverse : colors.error}
                   />
                   <Text
                     style={[
@@ -789,7 +768,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: colors.white,
+    color: colors.textInverse,
     marginLeft: 10,
   },
   addButton: {
@@ -803,7 +782,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)',
   },
   addButtonText: {
-    color: colors.white,
+    color: colors.textInverse,
     fontWeight: '600',
     marginLeft: 6,
   },
@@ -825,7 +804,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: colors.white,
+    color: colors.textInverse,
     marginBottom: 4,
   },
   statLabel: {
@@ -834,7 +813,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   filtersContainer: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
@@ -877,13 +856,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   categoryFilterTextActive: {
-    color: colors.white,
+    color: colors.textInverse,
   },
   listContainer: {
     paddingBottom: 20,
   },
   itemContainer: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderRadius: 12,
     marginBottom: 15,
     padding: 16,
@@ -924,7 +903,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warning,
   },
   cantidadText: {
-    color: colors.white,
+    color: colors.textInverse,
     fontWeight: '600',
     fontSize: 12,
   },
@@ -941,7 +920,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   categoriaText: {
-    color: colors.white,
+    color: colors.textInverse,
     fontSize: 12,
     fontWeight: '500',
     marginLeft: 4,
@@ -950,7 +929,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: colors.light,
+    borderTopColor: colors.borderLight,
     paddingTop: 12,
   },
   actionButton: {
@@ -970,10 +949,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
   },
   deleteButton: {
-    backgroundColor: colors.danger,
+    backgroundColor: colors.error,
   },
   actionButtonText: {
-    color: colors.white,
+    color: colors.textInverse,
     fontWeight: '500',
     marginLeft: 6,
     fontSize: 12,
@@ -982,7 +961,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
     paddingTop: 15,
     borderTopWidth: 1,
-    borderTopColor: colors.light,
+    borderTopColor: colors.borderLight,
   },
   movimientosHeader: {
     flexDirection: 'row',
@@ -1019,7 +998,7 @@ const styles = StyleSheet.create({
   },
   movItemSalida: {
     borderLeftWidth: 4,
-    borderLeftColor: colors.danger,
+    borderLeftColor: colors.error,
   },
   movHeader: {
     flexDirection: 'row',
@@ -1038,10 +1017,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
   },
   movTypeSalida: {
-    backgroundColor: colors.danger,
+    backgroundColor: colors.error,
   },
   movTypeText: {
-    color: colors.white,
+    color: colors.textInverse,
     fontSize: 12,
     fontWeight: '500',
     marginLeft: 4,
@@ -1100,7 +1079,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   emptyInventoryButtonText: {
-    color: colors.white,
+    color: colors.textInverse,
     fontWeight: '600',
   },
   modalOverlay: {
@@ -1110,7 +1089,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContainer: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderRadius: 12,
     maxHeight: '80%',
   },
@@ -1121,7 +1100,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: colors.light,
+    borderBottomColor: colors.borderLight,
   },
   modalTitle: {
     fontSize: 18,
@@ -1145,7 +1124,7 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.light,
+    borderColor: colors.borderLight,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
@@ -1168,7 +1147,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: colors.light,
+    borderColor: colors.borderLight,
     marginHorizontal: 5,
     borderRadius: 8,
   },
@@ -1182,13 +1161,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   tipoButtonTextSelected: {
-    color: colors.white,
+    color: colors.textInverse,
   },
   modalActions: {
     flexDirection: 'row',
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: colors.light,
+    borderTopColor: colors.borderLight,
   },
   cancelButton: {
     flex: 1,
@@ -1196,7 +1175,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: colors.gray,
+    borderColor: colors.border,
     borderRadius: 8,
     marginRight: 10,
   },
@@ -1214,7 +1193,7 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   saveButtonText: {
-    color: colors.white,
+    color: colors.textInverse,
     fontWeight: '600',
   },
   bottomSpacing: {

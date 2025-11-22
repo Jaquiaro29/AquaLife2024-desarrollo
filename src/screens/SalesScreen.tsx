@@ -18,6 +18,8 @@ import { db } from '../../firebaseConfig';
 import { formatCurrency } from '../utils/currency';
 import Toast from 'react-native-toast-message';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors } from '../styles/globalStyles';
 
 // Interfaz para pedidos
 interface PedidoDoc {
@@ -38,22 +40,7 @@ interface ClienteDoc {
   // ... otros campos (telefono, etc.)
 }
 
-// Paleta de colores extendida
-const colors = {
-  primary: '#00B5E2',
-  primaryLight: '#80DAF1',
-  primaryDark: '#0087B3',
-  secondary: '#FF6565',
-  secondaryLight: '#FFB2B2',
-  background: '#F8F9FA',
-  surface: '#FFFFFF',
-  textPrimary: '#212529',
-  textSecondary: '#6C757D',
-  border: '#DEE2E6',
-  success: '#28A745',
-  warning: '#FFC107',
-  error: '#DC3545',
-};
+
 
 // Tipos de búsqueda de fecha
 type SearchMode = 'dia' | 'semana' | 'mes' | 'ano' | 'rango';
@@ -221,7 +208,7 @@ const SalesScreen = () => {
         <View style={styles.pedidoDetails}>
           <View style={styles.botellonesContainer}>
             <View style={styles.botellonType}>
-              <Icon name="local-drink" size={16} color={colors.primary} />
+              <Icon name="local-drink" size={16} color={colors.secondary} />
               <Text style={styles.botellonText}>Con asa: {item.cantidadConAsa}</Text>
             </View>
             <View style={styles.botellonType}>
@@ -248,19 +235,19 @@ const SalesScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar backgroundColor={colors.primary} barStyle="light-content" />
+      <StatusBar backgroundColor={colors.secondaryDark} barStyle="light-content" />
       <View style={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <LinearGradient colors={colors.gradientSecondary} style={styles.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
           <View style={styles.headerContent}>
             <Text style={styles.headerTitle}>Panel de Ventas</Text>
             <Text style={styles.headerSubtitle}>Gestión y consulta de pedidos</Text>
           </View>
           <TouchableOpacity style={styles.filterButton} onPress={clearFilters}>
-            <Icon name="filter-alt" size={20} color={colors.surface} />
+            <Icon name="filter-alt" size={20} color={colors.textInverse} />
             <Text style={styles.filterButtonText}>Limpiar</Text>
           </TouchableOpacity>
-        </View>
+        </LinearGradient>
 
         <ScrollView 
           style={styles.scrollView}
@@ -432,7 +419,7 @@ const SalesScreen = () => {
             <View style={styles.detailedSummary}>
               <View style={styles.detailItem}>
                 <View style={styles.detailIcon}>
-                  <Icon name="check-circle" size={16} color={colors.primary} />
+                  <Icon name="check-circle" size={16} color={colors.secondary} />
                 </View>
                 <Text style={styles.detailLabel}>Con asa:</Text>
                 <Text style={styles.detailValue}>{conAsaCount}</Text>
@@ -577,7 +564,7 @@ const ModeButton = ({
       <Icon 
         name={icon} 
         size={18} 
-        color={selected ? colors.surface : colors.primary} 
+        color={selected ? colors.surface : colors.secondary} 
       />
       <Text style={[styles.modeButtonText, selected && styles.modeButtonTextSelected]}>
         {label}
@@ -590,14 +577,14 @@ const ModeButton = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   header: {
-    backgroundColor: colors.primary,
+    backgroundColor: 'transparent',
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 16,
@@ -618,12 +605,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: colors.surface,
+    color: colors.textInverse,
     marginBottom: 4,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: colors.primaryLight,
+    color: colors.textInverse,
   },
   filterButton: {
     flexDirection: 'row',
@@ -697,19 +684,19 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.secondary,
     marginRight: 8,
     backgroundColor: colors.surface,
   },
   modeButtonSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
   },
   modeButtonText: {
     marginLeft: 6,
     fontSize: 14,
     fontWeight: '500',
-    color: colors.primary,
+    color: colors.secondary,
   },
   modeButtonTextSelected: {
     color: colors.surface,
@@ -747,7 +734,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   totalSalesCard: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
   },
   botellonesCard: {
     backgroundColor: colors.secondary,
@@ -856,7 +843,7 @@ const styles = StyleSheet.create({
   pedidoTotal: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: colors.primary,
+    color: colors.secondary,
   },
   pedidoDetails: {
     flexDirection: 'row',
