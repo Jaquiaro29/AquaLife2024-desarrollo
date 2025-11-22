@@ -1,4 +1,4 @@
-// InventoryScreen.tsx (Interfaz Moderna y Mejorada)
+// InventoryScreen.tsx (Interfaz Moderna y Mejorada con Header Scrolleable)
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -11,6 +11,8 @@ import {
   ScrollView,
   Modal,
   Alert,
+  StatusBar,
+  Dimensions,
 } from 'react-native';
 import {
   collection,
@@ -25,6 +27,9 @@ import {
 import { db } from '../../firebaseConfig';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width } = Dimensions.get('window');
 
 interface ArticuloDoc {
   id: string;
@@ -46,14 +51,14 @@ interface SelectedItem {
   id: string;
 }
 
-// Paleta de colores moderna
+// Paleta de colores actualizada para coincidir con el dashboard
 const colors = {
-  primary: '#3498db',
-  primaryLight: '#5dade2',
-  primaryDark: '#2980b9',
-  secondary: '#2ecc71',
-  secondaryLight: '#58d68d',
-  secondaryDark: '#27ae60',
+  primary: '#667eea',
+  primaryLight: '#7c93ee',
+  primaryDark: '#5a67d8',
+  secondary: '#4CAF50',
+  secondaryLight: '#66bb6a',
+  secondaryDark: '#388e3c',
   danger: '#e74c3c',
   dangerLight: '#ec7063',
   warning: '#f39c12',
@@ -62,6 +67,10 @@ const colors = {
   gray: '#95a5a6',
   white: '#ffffff',
   background: '#f8f9fa',
+  surface: '#ffffff',
+  textPrimary: '#1e293b',
+  textSecondary: '#64748b',
+  textInverse: '#ffffff',
 };
 
 const InventoryScreen = () => {
@@ -389,121 +398,159 @@ const InventoryScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTitleContainer}>
-          <Ionicons name="water" size={28} color={colors.primary} />
-          <Text style={styles.headerTitle}>Inventario de Botellones</Text>
-        </View>
-        <TouchableOpacity 
-          style={styles.addButton} 
-          onPress={() => {
-            setEditingId(null);
-            setNombre('');
-            setCategoria('');
-            setCantidad(0);
-            setUnidad('');
-            setShowArticuloModal(true);
-          }}
+      <StatusBar backgroundColor="#667eea" barStyle="light-content" />
+      
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header DENTRO del ScrollView */}
+        <LinearGradient
+          colors={['#667eea', '#764ba2']}
+          style={styles.header}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
         >
-          <Ionicons name="add" size={20} color={colors.white} />
-          <Text style={styles.addButtonText}>Nuevo Artículo</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Filtros y búsqueda */}
-      <View style={styles.filtersContainer}>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={colors.gray} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Buscar por nombre o categoría..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color={colors.gray} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-        
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer}>
-          <TouchableOpacity
-            style={[styles.categoryFilter, !filterCategoria && styles.categoryFilterActive]}
-            onPress={() => setFilterCategoria('')}
-          >
-            <Text style={[styles.categoryFilterText, !filterCategoria && styles.categoryFilterTextActive]}>
-              Todos
-            </Text>
-          </TouchableOpacity>
-          {categoriasUnicas.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[styles.categoryFilter, filterCategoria === cat && styles.categoryFilterActive]}
-              onPress={() => setFilterCategoria(filterCategoria === cat ? '' : cat)}
+          <View style={styles.headerContent}>
+            <View style={styles.headerTitleContainer}>
+              <Ionicons name="cube" size={28} color={colors.white} />
+              <Text style={styles.headerTitle}>Gestión de Inventario</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.addButton} 
+              onPress={() => {
+                setEditingId(null);
+                setNombre('');
+                setCategoria('');
+                setCantidad(0);
+                setUnidad('');
+                setShowArticuloModal(true);
+              }}
             >
-              <Text style={[styles.categoryFilterText, filterCategoria === cat && styles.categoryFilterTextActive]}>
-                {cat}
-              </Text>
+              <Ionicons name="add" size={20} color={colors.white} />
+              <Text style={styles.addButtonText}>Nuevo Artículo</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+          </View>
+        </LinearGradient>
 
-      {/* Resumen de inventario */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{articulos.length}</Text>
-          <Text style={styles.statLabel}>Artículos</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>
-            {articulos.filter(a => a.cantidad < 10).length}
-          </Text>
-          <Text style={styles.statLabel}>Stock Bajo</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>
-            {categoriasUnicas.length}
-          </Text>
-          <Text style={styles.statLabel}>Categorías</Text>
-        </View>
-      </View>
-
-      {/* Lista principal de artículos */}
-      {filteredArticulos.length === 0 ? (
-        <View style={styles.emptyInventory}>
-          <Ionicons name="cube" size={60} color={colors.gray} />
-          <Text style={styles.emptyInventoryTitle}>No hay artículos</Text>
-          <Text style={styles.emptyInventoryText}>
-            {searchQuery || filterCategoria 
-              ? 'Intenta con otros términos de búsqueda' 
-              : 'Comienza agregando tu primer artículo al inventario'}
-          </Text>
-          <TouchableOpacity 
-            style={styles.emptyInventoryButton}
-            onPress={() => {
-              setEditingId(null);
-              setNombre('');
-              setCategoria('');
-              setCantidad(0);
-              setUnidad('');
-              setShowArticuloModal(true);
-            }}
+        {/* Contenido principal */}
+        <View style={styles.content}>
+          {/* Resumen de inventario */}
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.statsContainer}
           >
-            <Text style={styles.emptyInventoryButtonText}>Agregar Primer Artículo</Text>
-          </TouchableOpacity>
+            <LinearGradient
+              colors={['#667eea', '#764ba2']}
+              style={styles.statCard}
+            >
+              <Text style={styles.statNumber}>{articulos.length}</Text>
+              <Text style={styles.statLabel}>Artículos</Text>
+            </LinearGradient>
+            
+            <LinearGradient
+              colors={['#FF9800', '#F57C00']}
+              style={styles.statCard}
+            >
+              <Text style={styles.statNumber}>
+                {articulos.filter(a => a.cantidad < 10).length}
+              </Text>
+              <Text style={styles.statLabel}>Stock Bajo</Text>
+            </LinearGradient>
+            
+            <LinearGradient
+              colors={['#4CAF50', '#45a049']}
+              style={styles.statCard}
+            >
+              <Text style={styles.statNumber}>
+                {categoriasUnicas.length}
+              </Text>
+              <Text style={styles.statLabel}>Categorías</Text>
+            </LinearGradient>
+          </ScrollView>
+
+          {/* Filtros y búsqueda */}
+          <View style={styles.filtersContainer}>
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={20} color={colors.textSecondary} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Buscar por nombre o categoría..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholderTextColor={colors.textSecondary}
+              />
+              {searchQuery ? (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer}>
+              <TouchableOpacity
+                style={[styles.categoryFilter, !filterCategoria && styles.categoryFilterActive]}
+                onPress={() => setFilterCategoria('')}
+              >
+                <Text style={[styles.categoryFilterText, !filterCategoria && styles.categoryFilterTextActive]}>
+                  Todos
+                </Text>
+              </TouchableOpacity>
+              {categoriasUnicas.map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.categoryFilter, filterCategoria === cat && styles.categoryFilterActive]}
+                  onPress={() => setFilterCategoria(filterCategoria === cat ? '' : cat)}
+                >
+                  <Text style={[styles.categoryFilterText, filterCategoria === cat && styles.categoryFilterTextActive]}>
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Lista principal de artículos */}
+          {filteredArticulos.length === 0 ? (
+            <View style={styles.emptyInventory}>
+              <Ionicons name="cube" size={60} color={colors.gray} />
+              <Text style={styles.emptyInventoryTitle}>No hay artículos</Text>
+              <Text style={styles.emptyInventoryText}>
+                {searchQuery || filterCategoria 
+                  ? 'Intenta con otros términos de búsqueda' 
+                  : 'Comienza agregando tu primer artículo al inventario'}
+              </Text>
+              <TouchableOpacity 
+                style={styles.emptyInventoryButton}
+                onPress={() => {
+                  setEditingId(null);
+                  setNombre('');
+                  setCategoria('');
+                  setCantidad(0);
+                  setUnidad('');
+                  setShowArticuloModal(true);
+                }}
+              >
+                <Text style={styles.emptyInventoryButtonText}>Agregar Primer Artículo</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredArticulos}
+              renderItem={renderItemArticulo}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              contentContainerStyle={styles.listContainer}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
+
+          {/* Espacio al final para mejor scroll */}
+          <View style={styles.bottomSpacing} />
         </View>
-      ) : (
-        <FlatList
-          data={filteredArticulos}
-          renderItem={renderItemArticulo}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      </ScrollView>
 
       {/* Modal para crear/editar artículo */}
       <Modal
@@ -706,16 +753,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  // Header ahora está dentro del ScrollView
   header: {
+    paddingTop: 50,
+    paddingBottom: 25,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  // Contenedor para el contenido debajo del header
+  content: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.light,
   },
   headerTitleContainer: {
     flexDirection: 'row',
@@ -724,38 +789,65 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: colors.dark,
+    color: colors.white,
     marginLeft: 10,
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    elevation: 2,
-    shadowColor: colors.dark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   addButtonText: {
     color: colors.white,
     fontWeight: '600',
     marginLeft: 6,
   },
+  statsContainer: {
+    marginTop: -30,
+    marginBottom: 20,
+  },
+  statCard: {
+    padding: 20,
+    borderRadius: 16,
+    marginRight: 12,
+    minWidth: 120,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+  },
+  statNumber: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: colors.white,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '500',
+  },
   filtersContainer: {
     backgroundColor: colors.white,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.light,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.light,
+    backgroundColor: colors.background,
     borderRadius: 8,
     paddingHorizontal: 12,
     marginBottom: 15,
@@ -765,6 +857,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
     fontSize: 16,
+    color: colors.textPrimary,
   },
   categoriesContainer: {
     flexDirection: 'row',
@@ -772,7 +865,7 @@ const styles = StyleSheet.create({
   categoryFilter: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: colors.light,
+    backgroundColor: colors.background,
     borderRadius: 20,
     marginRight: 10,
   },
@@ -780,41 +873,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   categoryFilterText: {
-    color: colors.dark,
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   categoryFilterTextActive: {
     color: colors.white,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 20,
-    backgroundColor: colors.white,
-    marginHorizontal: 20,
-    marginTop: 15,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: colors.dark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.primary,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: colors.gray,
-    marginTop: 5,
-  },
   listContainer: {
-    padding: 20,
+    paddingBottom: 20,
   },
   itemContainer: {
     backgroundColor: colors.white,
@@ -822,9 +888,9 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     padding: 16,
     elevation: 2,
-    shadowColor: colors.dark,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
   },
   itemContainerSelected: {
@@ -843,7 +909,7 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: colors.dark,
+    color: colors.textPrimary,
     flex: 1,
   },
   cantidadBadge: {
@@ -927,7 +993,7 @@ const styles = StyleSheet.create({
   movTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: colors.dark,
+    color: colors.textPrimary,
   },
   agregarMovimientoBtn: {
     flexDirection: 'row',
@@ -942,7 +1008,7 @@ const styles = StyleSheet.create({
     maxHeight: 200,
   },
   movItem: {
-    backgroundColor: colors.light,
+    backgroundColor: colors.background,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
@@ -982,7 +1048,7 @@ const styles = StyleSheet.create({
   },
   movDate: {
     fontSize: 12,
-    color: colors.gray,
+    color: colors.textSecondary,
   },
   movDetails: {
     flexDirection: 'row',
@@ -992,11 +1058,11 @@ const styles = StyleSheet.create({
   movCantidad: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: colors.dark,
+    color: colors.textPrimary,
   },
   movObservaciones: {
     fontSize: 14,
-    color: colors.gray,
+    color: colors.textSecondary,
     flex: 1,
     marginLeft: 10,
   },
@@ -1006,25 +1072,24 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     marginTop: 10,
-    color: colors.gray,
+    color: colors.textSecondary,
     fontSize: 16,
   },
   emptyInventory: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
+    paddingTop: 40,
   },
   emptyInventoryTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: colors.dark,
-    marginTop: 15,
-    marginBottom: 10,
+    color: colors.textPrimary,
+    marginTop: 16,
+    marginBottom: 8,
   },
   emptyInventoryText: {
     fontSize: 16,
-    color: colors.gray,
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 25,
   },
@@ -1061,7 +1126,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: colors.dark,
+    color: colors.textPrimary,
   },
   closeButton: {
     padding: 4,
@@ -1075,7 +1140,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: colors.dark,
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   input: {
@@ -1086,6 +1151,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     backgroundColor: colors.background,
+    color: colors.textPrimary,
   },
   textArea: {
     minHeight: 80,
@@ -1113,6 +1179,7 @@ const styles = StyleSheet.create({
   tipoButtonText: {
     fontWeight: '500',
     marginLeft: 8,
+    color: colors.textSecondary,
   },
   tipoButtonTextSelected: {
     color: colors.white,
@@ -1134,7 +1201,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   cancelButtonText: {
-    color: colors.dark,
+    color: colors.textPrimary,
     fontWeight: '500',
   },
   saveButton: {
@@ -1149,6 +1216,9 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: colors.white,
     fontWeight: '600',
+  },
+  bottomSpacing: {
+    height: 20,
   },
 });
 

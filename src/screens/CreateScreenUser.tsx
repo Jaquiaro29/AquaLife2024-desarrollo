@@ -691,280 +691,292 @@ const CreateUserScreen = () => {
     <View style={styles.container}>
       <StatusBar backgroundColor="#1e90ff" barStyle="light-content" />
       
-      {/* Header */}
-      <LinearGradient
-        colors={['#1e90ff', '#00b4db']}
-        style={styles.header}
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerContent}>
-          <View style={styles.headerTitleContainer}>
-            <FontAwesome5 name="users-cog" size={24} color="#fff" />
-            <Text style={styles.headerTitle}>Gestión de Usuarios</Text>
-          </View>
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{listaUsuarios.length}</Text>
-              <Text style={styles.statLabel}>Admins</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{listaClientes.length}</Text>
-              <Text style={styles.statLabel}>Clientes</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{listaUsuarios.length + listaClientes.length}</Text>
-              <Text style={styles.statLabel}>Total</Text>
-            </View>
-          </View>
-        </View>
-      </LinearGradient>
-
-      <View style={styles.content}>
-        {/* Barra de búsqueda */}
-        <View style={styles.searchContainer}>
-          <View style={styles.searchInputContainer}>
-            <FontAwesome5 name="search" size={16} color="#666" style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Buscar por nombre, cédula, email..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <FontAwesome5 name="times" size={16} color="#666" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* Pestañas de navegación */}
-        <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'todos' && styles.tabActive]}
-            onPress={() => setActiveTab('todos')}
-          >
-            <FontAwesome5 
-              name="users" 
-              size={16} 
-              color={activeTab === 'todos' ? '#fff' : '#667eea'} 
-            />
-            <Text style={[styles.tabText, activeTab === 'todos' && styles.tabTextActive]}>
-              Todos ({listaUsuarios.length + listaClientes.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'admins' && styles.tabActive]}
-            onPress={() => setActiveTab('admins')}
-          >
-            <FontAwesome5 
-              name="user-cog" 
-              size={16} 
-              color={activeTab === 'admins' ? '#fff' : '#667eea'} 
-            />
-            <Text style={[styles.tabText, activeTab === 'admins' && styles.tabTextActive]}>
-              Admins ({listaUsuarios.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'clientes' && styles.tabActive]}
-            onPress={() => setActiveTab('clientes')}
-          >
-            <FontAwesome5 
-              name="user" 
-              size={16} 
-              color={activeTab === 'clientes' ? '#fff' : '#667eea'} 
-            />
-            <Text style={[styles.tabText, activeTab === 'clientes' && styles.tabTextActive]}>
-              Clientes ({listaClientes.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Botón principal de creación */}
-        <TouchableOpacity
-          style={styles.mainActionButton}
-          onPress={() => {
-            setShowForm(!showForm);
-            setSelectedItem(null);
-            setShowEditForm(false);
-          }}
+        {/* Header DENTRO del ScrollView */}
+        <LinearGradient
+          colors={['#667eea', '#764ba2']}
+          style={styles.header}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
         >
-          <LinearGradient
-            colors={['#4CAF50', '#45a049']}
-            style={styles.mainActionGradient}
-          >
-            <FontAwesome5 name={showForm ? "times" : "user-plus"} size={20} color="#fff" />
-            <Text style={styles.mainActionText}>
-              {showForm ? 'Cancelar' : 'Nuevo Usuario'}
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
-
-        {/* Formulario de creación */}
-        <Animated.View 
-          style={[
-            styles.formContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }]
-            }
-          ]}
-        >
-          {showForm && (
-            <LinearGradient
-              colors={['#f8f9fa', '#e9ecef']}
-              style={styles.formGradient}
-            >
-              <Text style={styles.formTitle}>
-                {tipo === 'cliente' ? '👤 Registrar Cliente' : '👑 Registrar Administrador'}
-              </Text>
-
-              <View style={styles.formGrid}>
-                <View style={styles.inputGroup}>
-                  <FontAwesome5 name="user" size={16} color="#667eea" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Nombre completo"
-                    value={nombre}
-                    onChangeText={setNombre}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <FontAwesome5 name="id-card" size={16} color="#667eea" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Cédula"
-                    value={cedula}
-                    onChangeText={setCedula}
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <FontAwesome5 name="envelope" size={16} color="#667eea" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Correo electrónico"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                  />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <FontAwesome5 name="phone" size={16} color="#667eea" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Teléfono"
-                    value={telefono}
-                    onChangeText={setTelefono}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-
-                <View style={[styles.inputGroup, styles.fullWidth]}>
-                  <FontAwesome5 name="map-marker-alt" size={16} color="#667eea" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Dirección completa"
-                    value={direccion}
-                    onChangeText={setDireccion}
-                  />
-                </View>
-
-                <View style={[styles.inputGroup, styles.fullWidth]}>
-                  <FontAwesome5 name="lock" size={16} color="#667eea" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Contraseña"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                  />
-                </View>
+          <View style={styles.headerContent}>
+            <View style={styles.headerTitleContainer}>
+              <FontAwesome5 name="users-cog" size={24} color="#fff" />
+              <Text style={styles.headerTitle}>Gestión de Usuarios</Text>
+            </View>
+            <View style={styles.statsContainer}>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{listaUsuarios.length}</Text>
+                <Text style={styles.statLabel}>Admins</Text>
               </View>
-
-              {/* Selector de tipo */}
-              <View style={styles.tipoContainer}>
-                <Text style={styles.tipoLabel}>Tipo de Cuenta:</Text>
-                <View style={styles.tipoButtons}>
-                  <TouchableOpacity
-                    style={[
-                      styles.tipoButton,
-                      tipo === 'usuario' && styles.tipoButtonSelected,
-                    ]}
-                    onPress={() => setTipo('usuario')}
-                  >
-                    <FontAwesome5 
-                      name="user-cog" 
-                      size={16} 
-                      color={tipo === 'usuario' ? '#fff' : '#667eea'} 
-                    />
-                    <Text
-                      style={[
-                        styles.tipoButtonText,
-                        tipo === 'usuario' && styles.tipoButtonTextSelected,
-                      ]}
-                    >
-                      Administrador
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.tipoButton,
-                      tipo === 'cliente' && styles.tipoButtonSelected,
-                    ]}
-                    onPress={() => setTipo('cliente')}
-                  >
-                    <FontAwesome5 
-                      name="user" 
-                      size={16} 
-                      color={tipo === 'cliente' ? '#fff' : '#667eea'} 
-                    />
-                    <Text
-                      style={[
-                        styles.tipoButtonText,
-                        tipo === 'cliente' && styles.tipoButtonTextSelected,
-                      ]}
-                    >
-                      Cliente
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{listaClientes.length}</Text>
+                <Text style={styles.statLabel}>Clientes</Text>
               </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{listaUsuarios.length + listaClientes.length}</Text>
+                <Text style={styles.statLabel}>Total</Text>
+              </View>
+            </View>
+          </View>
+        </LinearGradient>
 
-              {loading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#667eea" />
-                  <Text style={styles.loadingText}>Creando usuario...</Text>
-                </View>
-              ) : (
-                <TouchableOpacity 
-                  style={styles.createButton} 
-                  onPress={handleCreate}
-                >
-                  <LinearGradient
-                    colors={['#667eea', '#764ba2']}
-                    style={styles.createButtonGradient}
-                  >
-                    <FontAwesome5 name="save" size={18} color="#fff" />
-                    <Text style={styles.createButtonText}>Crear Usuario</Text>
-                  </LinearGradient>
+        {/* Contenido principal */}
+        <View style={styles.content}>
+          {/* Barra de búsqueda */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputContainer}>
+              <FontAwesome5 name="search" size={16} color="#666" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Buscar por nombre, cédula, email..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <FontAwesome5 name="times" size={16} color="#666" />
                 </TouchableOpacity>
               )}
+            </View>
+          </View>
+
+          {/* Pestañas de navegación */}
+          <View style={styles.tabsContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'todos' && styles.tabActive]}
+              onPress={() => setActiveTab('todos')}
+            >
+              <FontAwesome5 
+                name="users" 
+                size={16} 
+                color={activeTab === 'todos' ? '#fff' : '#667eea'} 
+              />
+              <Text style={[styles.tabText, activeTab === 'todos' && styles.tabTextActive]}>
+                Todos ({listaUsuarios.length + listaClientes.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'admins' && styles.tabActive]}
+              onPress={() => setActiveTab('admins')}
+            >
+              <FontAwesome5 
+                name="user-cog" 
+                size={16} 
+                color={activeTab === 'admins' ? '#fff' : '#667eea'} 
+              />
+              <Text style={[styles.tabText, activeTab === 'admins' && styles.tabTextActive]}>
+                Admins ({listaUsuarios.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'clientes' && styles.tabActive]}
+              onPress={() => setActiveTab('clientes')}
+            >
+              <FontAwesome5 
+                name="user" 
+                size={16} 
+                color={activeTab === 'clientes' ? '#fff' : '#667eea'} 
+              />
+              <Text style={[styles.tabText, activeTab === 'clientes' && styles.tabTextActive]}>
+                Clientes ({listaClientes.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Botón principal de creación */}
+          <TouchableOpacity
+            style={styles.mainActionButton}
+            onPress={() => {
+              setShowForm(!showForm);
+              setSelectedItem(null);
+              setShowEditForm(false);
+            }}
+          >
+            <LinearGradient
+              colors={['#4CAF50', '#45a049']}
+              style={styles.mainActionGradient}
+            >
+              <FontAwesome5 name={showForm ? "times" : "user-plus"} size={20} color="#fff" />
+              <Text style={styles.mainActionText}>
+                {showForm ? 'Cancelar' : 'Nuevo Usuario'}
+              </Text>
             </LinearGradient>
-          )}
-        </Animated.View>
+          </TouchableOpacity>
 
-        {/* Formulario de edición */}
-        {renderEditForm()}
+          {/* Formulario de creación */}
+          <Animated.View 
+            style={[
+              styles.formContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
+            ]}
+          >
+            {showForm && (
+              <LinearGradient
+                colors={['#f8f9fa', '#e9ecef']}
+                style={styles.formGradient}
+              >
+                <Text style={styles.formTitle}>
+                  {tipo === 'cliente' ? '👤 Registrar Cliente' : '👑 Registrar Administrador'}
+                </Text>
 
-        {/* Grid de usuarios */}
-        {renderUserGrid()}
-      </View>
+                <View style={styles.formGrid}>
+                  <View style={styles.inputGroup}>
+                    <FontAwesome5 name="user" size={16} color="#667eea" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Nombre completo"
+                      value={nombre}
+                      onChangeText={setNombre}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <FontAwesome5 name="id-card" size={16} color="#667eea" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Cédula"
+                      value={cedula}
+                      onChangeText={setCedula}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <FontAwesome5 name="envelope" size={16} color="#667eea" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Correo electrónico"
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <FontAwesome5 name="phone" size={16} color="#667eea" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Teléfono"
+                      value={telefono}
+                      onChangeText={setTelefono}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+
+                  <View style={[styles.inputGroup, styles.fullWidth]}>
+                    <FontAwesome5 name="map-marker-alt" size={16} color="#667eea" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Dirección completa"
+                      value={direccion}
+                      onChangeText={setDireccion}
+                    />
+                  </View>
+
+                  <View style={[styles.inputGroup, styles.fullWidth]}>
+                    <FontAwesome5 name="lock" size={16} color="#667eea" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Contraseña"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry
+                    />
+                  </View>
+                </View>
+
+                {/* Selector de tipo */}
+                <View style={styles.tipoContainer}>
+                  <Text style={styles.tipoLabel}>Tipo de Cuenta:</Text>
+                  <View style={styles.tipoButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.tipoButton,
+                        tipo === 'usuario' && styles.tipoButtonSelected,
+                      ]}
+                      onPress={() => setTipo('usuario')}
+                    >
+                      <FontAwesome5 
+                        name="user-cog" 
+                        size={16} 
+                        color={tipo === 'usuario' ? '#fff' : '#667eea'} 
+                      />
+                      <Text
+                        style={[
+                          styles.tipoButtonText,
+                          tipo === 'usuario' && styles.tipoButtonTextSelected,
+                        ]}
+                      >
+                        Administrador
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.tipoButton,
+                        tipo === 'cliente' && styles.tipoButtonSelected,
+                      ]}
+                      onPress={() => setTipo('cliente')}
+                    >
+                      <FontAwesome5 
+                        name="user" 
+                        size={16} 
+                        color={tipo === 'cliente' ? '#fff' : '#667eea'} 
+                      />
+                      <Text
+                        style={[
+                          styles.tipoButtonText,
+                          tipo === 'cliente' && styles.tipoButtonTextSelected,
+                        ]}
+                      >
+                        Cliente
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {loading ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#667eea" />
+                    <Text style={styles.loadingText}>Creando usuario...</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity 
+                    style={styles.createButton} 
+                    onPress={handleCreate}
+                  >
+                    <LinearGradient
+                      colors={['#667eea', '#764ba2']}
+                      style={styles.createButtonGradient}
+                    >
+                      <FontAwesome5 name="save" size={18} color="#fff" />
+                      <Text style={styles.createButtonText}>Crear Usuario</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+              </LinearGradient>
+            )}
+          </Animated.View>
+
+          {/* Formulario de edición */}
+          {renderEditForm()}
+
+          {/* Grid de usuarios */}
+          {renderUserGrid()}
+
+          {/* Espacio al final para mejor scroll */}
+          <View style={styles.bottomSpacing} />
+        </View>
+      </ScrollView>
 
       {/* Botón flotante de Reporte */}
       <TouchableOpacity 
@@ -990,12 +1002,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F7FA',
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  // Header ahora está dentro del ScrollView
   header: {
     paddingTop: 50,
-    paddingBottom: 20,
+    paddingBottom: 25,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  // Contenedor para el contenido debajo del header
+  content: {
+    padding: 20,
+    paddingBottom: 40,
   },
   headerContent: {
     flexDirection: 'row',
@@ -1028,10 +1057,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
-  },
-  content: {
-    flex: 1,
-    padding: 15,
   },
   searchContainer: {
     marginBottom: 15,
@@ -1462,6 +1487,9 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  bottomSpacing: {
+    height: 20,
   },
 });
 

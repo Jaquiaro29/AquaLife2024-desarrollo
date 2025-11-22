@@ -73,10 +73,7 @@ const CustomDrawerContent: React.FC<Props> = (props) => {
             label="Ventas"
             onPress={() => navigation.navigate('Sales')}
           />
-          <DrawerItem
-            label="Estadísticas"
-            onPress={() => navigation.navigate('Stats')}
-          />
+          
           <DrawerItem
             label="Inventario"
             onPress={() => navigation.navigate('Inventory')}

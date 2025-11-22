@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { auth, db } from '../../firebaseConfig';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { formatCurrency } from '../utils/currency';
 
 // Interfaces y Tipos
 interface Pedido {
@@ -171,7 +172,18 @@ const PedidosScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={["#3b82f6"]}
+        />
+      }
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.scrollContent} // ESTA ES LA CLAVE
+    >
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -251,7 +263,7 @@ const PedidosScreen = () => {
 
       {/* Ordenamiento */}
       <View style={styles.sortContainer}>
-        <Text style={styles.sortLabel}>Ordenar por:</Text>
+        <Text style={styles.sortLabel}>por:</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <TouchableOpacity
             style={[
@@ -301,17 +313,7 @@ const PedidosScreen = () => {
       </View>
 
       {/* Lista de Pedidos */}
-      <ScrollView
-        style={styles.pedidosList}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#3b82f6']}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.pedidosList}>
         {pedidosFiltrados().length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateIcon}>📦</Text>
@@ -350,8 +352,8 @@ const PedidosScreen = () => {
                       {formatFecha(pedido.fecha)} • {formatHora(pedido.hora)}
                     </Text>
                   </View>
-                  <View style={[styles.estadoBadge, { backgroundColor: estadoStyles.backgroundColor }]}>
-                    <Text style={[styles.estadoText, { color: estadoStyles.color }]}>
+                  <View style={[styles.estadoBadge, { backgroundColor: estadoStyles.backgroundColor }]}> 
+                    <Text style={[styles.estadoText, { color: estadoStyles.color }]}> 
                       {estadoStyles.icon} {pedido.estado}
                     </Text>
                   </View>
@@ -375,7 +377,7 @@ const PedidosScreen = () => {
 
                   <View style={styles.pedidoFooter}>
                     <Text style={styles.totalText}>
-                      ${pedido.total.toFixed(2)}
+                      {formatCurrency(pedido.total)}
                     </Text>
                     <View style={styles.arrowContainer}>
                       <Text style={styles.arrow}>›</Text>
@@ -386,7 +388,10 @@ const PedidosScreen = () => {
             );
           })
         )}
-      </ScrollView>
+      </View>
+
+      {/* Espacio al final para mejor scroll */}
+      <View style={styles.bottomSpacing} />
 
       {/* Modal de Detalles del Pedido */}
       <Modal
@@ -462,11 +467,11 @@ const PedidosScreen = () => {
                     <Text style={styles.modalSectionTitle}>Información de Pago</Text>
                     <View style={styles.modalRow}>
                       <Text style={styles.modalLabel}>💰 Costo unitario:</Text>
-                      <Text style={styles.modalValue}>${selectedPedido.costoUnitario.toFixed(2)}</Text>
+                      <Text style={styles.modalValue}>{formatCurrency(selectedPedido.costoUnitario)}</Text>
                     </View>
                     <View style={styles.modalRow}>
                       <Text style={styles.modalLabel}>💵 Total:</Text>
-                      <Text style={styles.modalTotal}>${selectedPedido.total.toFixed(2)}</Text>
+                      <Text style={styles.modalTotal}>{formatCurrency(selectedPedido.total)}</Text>
                     </View>
                   </View>
 
@@ -485,7 +490,7 @@ const PedidosScreen = () => {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScrollView>
   );
 };
 
@@ -493,6 +498,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  // ESTILO CLAVE AÑADIDO:
+  scrollContent: {
+    flexGrow: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -553,6 +562,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     marginRight: 12,
     flexDirection: 'row',
+    maxHeight: 100,
     alignItems: 'center',
   },
   filterButtonActive: {
@@ -611,13 +621,14 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   pedidosList: {
-    flex: 1,
+    // Quitamos el flex: 1 y padding de aquí
     padding: 20,
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 40, // Reducido
+    minHeight: 150, // Altura mínima
   },
   emptyStateIcon: {
     fontSize: 64,
@@ -721,6 +732,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#64748b',
     fontWeight: 'bold',
+  },
+  // NUEVO ESTILO AÑADIDO:
+  bottomSpacing: {
+    height: 20, // Espacio al final para mejor experiencia de scroll
   },
   modalOverlay: {
     flex: 1,

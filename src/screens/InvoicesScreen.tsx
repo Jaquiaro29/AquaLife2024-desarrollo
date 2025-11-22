@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
+import { formatCurrency } from '../utils/currency';
 import Toast from 'react-native-toast-message';
 
 // Interfaz minimal para pedidos
@@ -16,7 +17,7 @@ interface PedidoDoc {
   id: string;
   clienteId: string;
   fecha: string;          // "YYYY-MM-DD"
-  total: number;          // monto total en $
+  total: number;          // monto total
   cantidadConAsa: number;
   cantidadSinAsa: number;
   // ... otros campos si los necesitas
@@ -161,7 +162,7 @@ const InvoicesScreen = () => {
     return (
       <View style={styles.pedidoItem}>
         <Text style={styles.pedidoText}>
-          Fecha: {item.fecha} | Total: ${item.total.toFixed(2)}
+          Fecha: {item.fecha} | Total: {formatCurrency(item.total)}
         </Text>
         <Text style={styles.pedidoText}>
           Botellones: ConAsa={item.cantidadConAsa}, SinAsa={item.cantidadSinAsa}
@@ -189,22 +190,22 @@ const InvoicesScreen = () => {
       <View style={styles.statsContainer}>
         <View style={styles.statBox}>
           <Text style={styles.statTitle}>Hoy</Text>
-          <Text style={styles.statValue}>${totalDia.toFixed(2)}</Text>
+          <Text style={styles.statValue}>{formatCurrency(totalDia)}</Text>
           <Text style={styles.statValue}>Bot: {botellonesDia}</Text>
         </View>
         <View style={styles.statBox}>
           <Text style={styles.statTitle}>Semana</Text>
-          <Text style={styles.statValue}>${totalSemana.toFixed(2)}</Text>
+          <Text style={styles.statValue}>{formatCurrency(totalSemana)}</Text>
           <Text style={styles.statValue}>Bot: {botellonesSemana}</Text>
         </View>
         <View style={styles.statBox}>
           <Text style={styles.statTitle}>Mes</Text>
-          <Text style={styles.statValue}>${totalMes.toFixed(2)}</Text>
+          <Text style={styles.statValue}>{formatCurrency(totalMes)}</Text>
           <Text style={styles.statValue}>Bot: {botellonesMes}</Text>
         </View>
         <View style={styles.statBox}>
           <Text style={styles.statTitle}>Año</Text>
-          <Text style={styles.statValue}>${totalAno.toFixed(2)}</Text>
+          <Text style={styles.statValue}>{formatCurrency(totalAno)}</Text>
           <Text style={styles.statValue}>Bot: {botellonesAno}</Text>
         </View>
       </View>

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
+import { formatCurrency } from '../utils/currency';
 import Toast from 'react-native-toast-message';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
@@ -214,7 +215,7 @@ const SalesScreen = () => {
             <Icon name="event" size={16} color={colors.textSecondary} />
             <Text style={styles.pedidoDate}>{formatDate(item.fecha)}</Text>
           </View>
-          <Text style={styles.pedidoTotal}>${item.total.toFixed(2)}</Text>
+                  <Text style={styles.pedidoTotal}>{formatCurrency(item.total)}</Text>
         </View>
         
         <View style={styles.pedidoDetails}>
@@ -413,7 +414,7 @@ const SalesScreen = () => {
                 </View>
                 <View style={styles.summaryTextContainer}>
                   <Text style={styles.summaryLabel}>Total Ventas</Text>
-                  <Text style={styles.summaryValue}>${totalAmount.toFixed(2)}</Text>
+                  <Text style={styles.summaryValue}>{formatCurrency(totalAmount)}</Text>
                 </View>
               </View>
               

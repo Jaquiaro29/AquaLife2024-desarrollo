@@ -12,6 +12,9 @@ import {
 } from 'react-native';
 import { db, auth } from "../../firebaseConfig";
 import { collection, addDoc } from "firebase/firestore";
+import { formatCurrency } from '../utils/currency';
+import { getBcvUsdRate } from '../utils/getBcvRate';
+import { useGlobalConfig } from '../hooks/useGlobalConfig';
 import { getNextOrderNumber } from "../components/getNextOrderNumber";
 import { colors } from '../styles/globalStyles';
 
@@ -19,7 +22,7 @@ import { colors } from '../styles/globalStyles';
 interface Order {
   withHandle: number;
   withoutHandle: number;
-  type: "intercambio" | "llenado";
+  type: "recarga" | "intercambio";
   comments: string;
   priority: "alta" | "normal";
 }
@@ -29,14 +32,14 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [order, setOrder] = useState<Order>({
     withHandle: 0,
     withoutHandle: 0,
-    type: "intercambio",
+    type: "recarga",
     comments: "",
     priority: "normal",
   });
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [dolarRate, setDolarRate] = useState<number | null>(null);
   const [todayDate, setTodayDate] = useState<string>("");
-  const [costPerBottle, setCostPerBottle] = useState(0.5);
+  // costPerBottle will be derived from global config (botellon price) and priority
   const [loading, setLoading] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
 
@@ -56,10 +59,19 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           throw new Error("Error en la respuesta de la API");
         }
         const data = await response.json();
-        console.log("API Response:", data); 
+        console.log("API Response:", data);
         setDolarRate(data.tasa);
       } catch (error) {
         console.error("Error fetching dolar rate:", error);
+        // Fallback: intentar obtener tasa desde BCV
+        try {
+          const res = await getBcvUsdRate();
+          if (res.rate) {
+            setDolarRate(res.rate);
+          }
+        } catch (e) {
+          console.error('Fallback BCV failed:', e);
+        }
       }
     };
 
@@ -72,9 +84,7 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const handleChange = <T extends keyof Order>(field: T, value: Order[T]) => {
     setOrder((prev) => ({ ...prev, [field]: value }));
 
-    if (field === "priority") {
-      setCostPerBottle(value === "alta" ? 0.7 : 0.5);
-    }
+    // costPerBottle is derived dynamically; no local state update needed here
   };
 
   // Validación y confirmación del pedido
@@ -92,13 +102,31 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   // Cálculos de negocio
   const totalBottles = order.withHandle + order.withoutHandle;
+
+  // Obtener precio global mediante hook
+  const { botellonPrice, botellonPriceHigh } = useGlobalConfig();
+
+  const PRIORITY_MULTIPLIER: Record<string, number> = {
+    normal: 1,
+    alta: 1.4,
+  };
+
+  const basePrice = (typeof botellonPrice === 'number' && !isNaN(botellonPrice)) ? botellonPrice : 0.5;
+  const highPriceAvailable = (typeof botellonPriceHigh === 'number' && !isNaN(botellonPriceHigh));
+  const costPerBottle = order.priority === 'alta'
+    ? (highPriceAvailable ? botellonPriceHigh! : basePrice * PRIORITY_MULTIPLIER.alta)
+    : basePrice * PRIORITY_MULTIPLIER.normal;
   const totalPrice = totalBottles * costPerBottle;
+
+  // Precios visibles en la UI para las opciones de prioridad (tomados desde el panel admin cuando estén disponibles)
+  const displayPriceNormal = basePrice * PRIORITY_MULTIPLIER.normal;
+  const displayPriceHigh = highPriceAvailable ? botellonPriceHigh! : basePrice * PRIORITY_MULTIPLIER.alta;
 
   // Lógica de descripción del tipo de pedido
   const getTypeDescription = (type: Order["type"]) => {
-    return type === "intercambio"
-      ? "Sus botellones serán cambiados por unos llenos."
-      : "Sus botellones serán tratados, desinfectados y estarán óptimos para su entrega.";
+    return type === "recarga"
+      ? "cambiamos y desinfectamos los botellones; recibes botellones revisados y en óptimas condiciones. Recomendado si tus botellones requieren limpieza o mantenimiento." 
+      : "trae tus botellones vacíos y recíbelos llenos rápidamente. Ideal si solo necesitas reemplazar botellones vacíos por llenos.";
   };
 
   // Persistencia en Firestore
@@ -142,7 +170,7 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       setOrder({
         withHandle: 0,
         withoutHandle: 0,
-        type: "intercambio",
+        type: "recarga",
         comments: "",
         priority: "normal",
       });
@@ -173,7 +201,7 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           <View style={styles.dateRateContainer}>
             <Text style={styles.date}>📅 {todayDate}</Text>
             {dolarRate && (
-              <Text style={styles.rate}>💵 Tasa: ${dolarRate.toFixed(2)}</Text>
+              <Text style={styles.rate}>💵 Tasa: {formatCurrency(dolarRate)}</Text>
             )}
           </View>
         </View>
@@ -185,6 +213,20 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             <TouchableOpacity
               style={[
                 styles.typeButton,
+                order.type === 'recarga' && styles.typeButtonActive
+              ]}
+              onPress={() => handleChange('type', 'recarga')}
+            >
+              <Text style={[
+                styles.typeButtonText,
+                order.type === 'recarga' && styles.typeButtonTextActive
+              ]}>
+                🔄 Recarga
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.typeButton,
                 order.type === 'intercambio' && styles.typeButtonActive
               ]}
               onPress={() => handleChange('type', 'intercambio')}
@@ -193,21 +235,7 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 styles.typeButtonText,
                 order.type === 'intercambio' && styles.typeButtonTextActive
               ]}>
-                🔄 Intercambio
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.typeButton,
-                order.type === 'llenado' && styles.typeButtonActive
-              ]}
-              onPress={() => handleChange('type', 'llenado')}
-            >
-              <Text style={[
-                styles.typeButtonText,
-                order.type === 'llenado' && styles.typeButtonTextActive
-              ]}>
-                💧 Llenado
+                💧 Intercambio
               </Text>
             </TouchableOpacity>
           </View>
@@ -286,7 +314,7 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             >
               <Text style={styles.priorityIcon}>⏱️</Text>
               <Text style={styles.priorityTitle}>Normal</Text>
-              <Text style={styles.priorityPrice}>$0.50 c/u</Text>
+              <Text style={styles.priorityPrice}>{formatCurrency(displayPriceNormal)} c/u</Text>
               <Text style={styles.priorityTime}>Entrega: 24-48h</Text>
             </TouchableOpacity>
 
@@ -299,7 +327,7 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             >
               <Text style={styles.priorityIcon}>⚡</Text>
               <Text style={styles.priorityTitle}>Alta Prioridad</Text>
-              <Text style={styles.priorityPrice}>$0.70 c/u</Text>
+              <Text style={styles.priorityPrice}>{formatCurrency(displayPriceHigh)} c/u</Text>
               <Text style={styles.priorityTime}>Entrega: 12-24h</Text>
             </TouchableOpacity>
           </View>
@@ -328,11 +356,11 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Costo unitario:</Text>
-            <Text style={styles.summaryValue}>${costPerBottle.toFixed(2)}</Text>
+            <Text style={styles.summaryValue}>{formatCurrency(costPerBottle)}</Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Total a pagar:</Text>
-            <Text style={styles.summaryTotal}>${totalPrice.toFixed(2)}</Text>
+            <Text style={styles.summaryTotal}>{formatCurrency(totalPrice)}</Text>
           </View>
         </View>
 
@@ -365,7 +393,7 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               <View style={styles.modalRow}>
                 <Text style={styles.modalLabel}>Tipo de servicio:</Text>
                 <Text style={styles.modalValue}>
-                  {order.type === 'intercambio' ? '🔄 Intercambio' : '💧 Llenado'}
+                  {order.type === 'recarga' ? '🔄 Recarga' : '💧 Intercambio'}
                 </Text>
               </View>
               <View style={styles.modalRow}>
@@ -387,7 +415,7 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               </View>
               <View style={styles.modalRow}>
                 <Text style={styles.modalLabel}>Costo total:</Text>
-                <Text style={styles.modalTotal}>${totalPrice.toFixed(2)}</Text>
+                <Text style={styles.modalTotal}>{formatCurrency(totalPrice)}</Text>
               </View>
             </View>
 

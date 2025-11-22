@@ -1,4 +1,4 @@
-// OrdersAdminScreen.tsx - Versión mejorada con las correcciones solicitadas
+// OrdersAdminScreen.tsx - Versión mejorada con header scrolleable
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -13,6 +13,7 @@ import {
   Alert,
   ScrollView,
   StatusBar,
+  Dimensions,
 } from 'react-native';
 import {
   collection,
@@ -25,7 +26,11 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { globalStyles, colors } from '../styles/globalStyles';
+import { formatCurrency } from '../utils/currency';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width } = Dimensions.get('window');
 
 // ===== Interfaces / tipos =====
 interface Pedido {
@@ -386,7 +391,7 @@ const OrdersAdminScreen = () => {
             <View style={styles.footerRow}>
               <View style={styles.totalContainer}>
                 <Text style={styles.totalLabel}>Total:</Text>
-                <Text style={styles.totalValue}>${pedido.total.toFixed(2)}</Text>
+                <Text style={styles.totalValue}>{formatCurrency(pedido.total)}</Text>
               </View>
               
               {pedido.observaciones ? (
@@ -464,11 +469,20 @@ const OrdersAdminScreen = () => {
   // Render final
   return (
     <View style={styles.container}>
-      <StatusBar backgroundColor={colors.primary} barStyle="light-content" />
+      <StatusBar backgroundColor="#667eea" barStyle="light-content" />
       
-      {/* Header FIJO */}
-      <View style={styles.fixedHeader}>
-        <View style={styles.header}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header DENTRO del ScrollView */}
+        <LinearGradient
+          colors={['#667eea', '#764ba2']}
+          style={styles.header}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
           <View style={styles.headerContent}>
             <Text style={styles.headerTitle}>Gestión de Pedidos</Text>
             <Text style={styles.headerSubtitle}>Panel de administración</Text>
@@ -476,130 +490,147 @@ const OrdersAdminScreen = () => {
           <View style={styles.inventoryAlert}>
             {sellosCantidad < 200 && (
               <View style={styles.alertItem}>
-                <Ionicons name="warning" size={16} color={colors.warning} />
+                <Ionicons name="warning" size={16} color="#fff" />
                 <Text style={styles.alertText}>Sellos: {sellosCantidad}</Text>
               </View>
             )}
             {tapasCantidad < 200 && (
               <View style={styles.alertItem}>
-                <Ionicons name="warning" size={16} color={colors.warning} />
+                <Ionicons name="warning" size={16} color="#fff" />
                 <Text style={styles.alertText}>Tapas: {tapasCantidad}</Text>
               </View>
             )}
           </View>
-        </View>
+        </LinearGradient>
 
-        {/* Dashboard Stats */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.statsContainer}
-        >
-          <View style={[styles.statCard, { backgroundColor: colors.primary }]}>
-            <Text style={styles.statNumber}>{stats.total}</Text>
-            <Text style={styles.statLabel}>Total Pedidos</Text>
-          </View>
-          
-          <View style={[styles.statCard, { backgroundColor: colors.warning }]}>
-            <Text style={styles.statNumber}>{stats.pendientes}</Text>
-            <Text style={styles.statLabel}>Pendientes</Text>
-          </View>
-          
-          <View style={[styles.statCard, { backgroundColor: colors.success }]}>
-            <Text style={styles.statNumber}>{stats.listos}</Text>
-            <Text style={styles.statLabel}>Listos</Text>
-          </View>
-          
-          <View style={[styles.statCard, { backgroundColor: colors.secondary }]}>
-            <Text style={styles.statNumber}>{stats.entregados}</Text>
-            <Text style={styles.statLabel}>Entregados</Text>
-          </View>
-        </ScrollView>
-
-        {/* Search and Filters */}
-        <View style={styles.controlsContainer}>
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color={colors.textSecondary} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Buscar por Nº de pedido o cliente..."
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholderTextColor={colors.textSecondary}
-            />
-          </View>
-          
+        {/* Contenido principal */}
+        <View style={styles.content}>
+          {/* Dashboard Stats */}
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false}
-            style={styles.filtersContainer}
+            style={styles.statsContainer}
           >
-            <TouchableOpacity
-              style={[styles.filterButton, activeFilter === 'todos' && styles.filterButtonActive]}
-              onPress={() => setActiveFilter('todos')}
+            <LinearGradient
+              colors={['#667eea', '#764ba2']}
+              style={styles.statCard}
             >
-              <Text style={[styles.filterButtonText, activeFilter === 'todos' && styles.filterButtonTextActive]}>
-                Todos
-              </Text>
-            </TouchableOpacity>
+              <Text style={styles.statNumber}>{stats.total}</Text>
+              <Text style={styles.statLabel}>Total Pedidos</Text>
+            </LinearGradient>
             
-            <TouchableOpacity
-              style={[styles.filterButton, activeFilter === 'pendiente' && styles.filterButtonActive]}
-              onPress={() => setActiveFilter('pendiente')}
+            <LinearGradient
+              colors={['#FF9800', '#F57C00']}
+              style={styles.statCard}
             >
-              <Text style={[styles.filterButtonText, activeFilter === 'pendiente' && styles.filterButtonTextActive]}>
-                Pendientes
-              </Text>
-            </TouchableOpacity>
+              <Text style={styles.statNumber}>{stats.pendientes}</Text>
+              <Text style={styles.statLabel}>Pendientes</Text>
+            </LinearGradient>
             
-            <TouchableOpacity
-              style={[styles.filterButton, activeFilter === 'listo' && styles.filterButtonActive]}
-              onPress={() => setActiveFilter('listo')}
+            <LinearGradient
+              colors={['#4CAF50', '#45a049']}
+              style={styles.statCard}
             >
-              <Text style={[styles.filterButtonText, activeFilter === 'listo' && styles.filterButtonTextActive]}>
-                Listos
-              </Text>
-            </TouchableOpacity>
+              <Text style={styles.statNumber}>{stats.listos}</Text>
+              <Text style={styles.statLabel}>Listos</Text>
+            </LinearGradient>
             
-            <TouchableOpacity
-              style={[styles.filterButton, activeFilter === 'entregado' && styles.filterButtonActive]}
-              onPress={() => setActiveFilter('entregado')}
+            <LinearGradient
+              colors={['#9C27B0', '#7B1FA2']}
+              style={styles.statCard}
             >
-              <Text style={[styles.filterButtonText, activeFilter === 'entregado' && styles.filterButtonTextActive]}>
-                Entregados
-              </Text>
-            </TouchableOpacity>
+              <Text style={styles.statNumber}>{stats.entregados}</Text>
+              <Text style={styles.statLabel}>Entregados</Text>
+            </LinearGradient>
           </ScrollView>
-        </View>
-      </View>
 
-      {/* Lista de Pedidos con margen superior para el header fijo */}
-      <View style={styles.listContainer}>
-        {listData.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="document-text-outline" size={64} color={colors.textSecondary} />
-            <Text style={styles.emptyStateTitle}>No se encontraron pedidos</Text>
-            <Text style={styles.emptyStateSubtitle}>
-              {searchText || activeFilter !== 'todos' 
-                ? 'Intenta cambiar los filtros de búsqueda' 
-                : 'No hay pedidos registrados en el sistema'}
-            </Text>
+          {/* Search and Filters */}
+          <View style={styles.controlsContainer}>
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={20} color={colors.textSecondary} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Buscar por Nº de pedido o cliente..."
+                value={searchText}
+                onChangeText={setSearchText}
+                placeholderTextColor={colors.textSecondary}
+              />
+            </View>
+            
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.filtersContainer}
+            >
+              <TouchableOpacity
+                style={[styles.filterButton, activeFilter === 'todos' && styles.filterButtonActive]}
+                onPress={() => setActiveFilter('todos')}
+              >
+                <Text style={[styles.filterButtonText, activeFilter === 'todos' && styles.filterButtonTextActive]}>
+                  Todos
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.filterButton, activeFilter === 'pendiente' && styles.filterButtonActive]}
+                onPress={() => setActiveFilter('pendiente')}
+              >
+                <Text style={[styles.filterButtonText, activeFilter === 'pendiente' && styles.filterButtonTextActive]}>
+                  Pendientes
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.filterButton, activeFilter === 'listo' && styles.filterButtonActive]}
+                onPress={() => setActiveFilter('listo')}
+              >
+                <Text style={[styles.filterButtonText, activeFilter === 'listo' && styles.filterButtonTextActive]}>
+                  Listos
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.filterButton, activeFilter === 'entregado' && styles.filterButtonActive]}
+                onPress={() => setActiveFilter('entregado')}
+              >
+                <Text style={[styles.filterButtonText, activeFilter === 'entregado' && styles.filterButtonTextActive]}>
+                  Entregados
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
-        ) : (
-          <FlatList
-            data={listData}
-            keyExtractor={(item, index) => {
-              if (item.type === 'header') {
-                return `header-${item.fecha}-${index}`;
-              }
-              return (item.data as Pedido).id;
-            }}
-            renderItem={renderItem}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-      </View>
+
+          {/* Lista de Pedidos */}
+          {listData.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="document-text-outline" size={64} color={colors.textSecondary} />
+              <Text style={styles.emptyStateTitle}>No se encontraron pedidos</Text>
+              <Text style={styles.emptyStateSubtitle}>
+                {searchText || activeFilter !== 'todos' 
+                  ? 'Intenta cambiar los filtros de búsqueda' 
+                  : 'No hay pedidos registrados en el sistema'}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={listData}
+              keyExtractor={(item, index) => {
+                if (item.type === 'header') {
+                  return `header-${item.fecha}-${index}`;
+                }
+                return (item.data as Pedido).id;
+              }}
+              renderItem={renderItem}
+              scrollEnabled={false}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
+
+          {/* Espacio al final para mejor scroll */}
+          <View style={styles.bottomSpacing} />
+        </View>
+      </ScrollView>
     </View>
   );
 };
@@ -610,22 +641,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.surface,
   },
-  fixedHeader: {
-    backgroundColor: colors.surface,
-    zIndex: 1000,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+  scrollView: {
+    flex: 1,
   },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  // Header ahora está dentro del ScrollView
   header: {
-    backgroundColor: colors.primary,
     paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    paddingBottom: 20,
+    paddingBottom: 25,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  // Contenedor para el contenido debajo del header
+  content: {
+    padding: 20,
+    paddingBottom: 40,
   },
   headerContent: {
     marginBottom: 10,
@@ -633,7 +671,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: colors.textInverse,
+    color: '#fff',
     marginBottom: 4,
   },
   headerSubtitle: {
@@ -654,13 +692,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   alertText: {
-    color: colors.textInverse,
+    color: '#fff',
     marginLeft: 6,
     fontSize: 14,
     fontWeight: '500',
   },
   statsContainer: {
-    paddingHorizontal: 20,
     marginTop: -30,
     marginBottom: 20,
   },
@@ -678,7 +715,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: colors.textInverse,
+    color: '#fff',
     marginBottom: 4,
   },
   statLabel: {
@@ -687,7 +724,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   controlsContainer: {
-    paddingHorizontal: 20,
     marginBottom: 16,
   },
   searchContainer: {
@@ -708,7 +744,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
     fontSize: 16,
-  color: colors.textPrimary,
+    color: colors.textPrimary,
   },
   filtersContainer: {
     marginBottom: 8,
@@ -726,7 +762,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   filterButtonActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#667eea',
   },
   filterButtonText: {
     fontSize: 14,
@@ -734,16 +770,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   filterButtonTextActive: {
-    color: colors.textInverse,
-  },
-  listContainer: {
-    flex: 1,
-    marginTop: 0, // El header fijo ya tiene su espacio
+    color: '#fff',
   },
   listContent: {
-    paddingHorizontal: 20,
     paddingBottom: 20,
-    paddingTop: 10, // Espacio adicional para separar del header fijo
   },
   headerContainer: {
     backgroundColor: 'rgba(59, 130, 246, 0.08)',
@@ -751,12 +781,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginVertical: 8,
     borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
+    borderLeftColor: '#667eea',
   },
   headerTextFecha: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: colors.primary,
+    color: '#667eea',
   },
   card: {
     backgroundColor: colors.background,
@@ -780,7 +810,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-  color: colors.textPrimary,
+    color: colors.textPrimary,
   },
   estadoBadge: {
     paddingHorizontal: 12,
@@ -812,7 +842,7 @@ const styles = StyleSheet.create({
   },
   infoValue: {
     fontSize: 14,
-  color: colors.textPrimary,
+    color: colors.textPrimary,
     fontWeight: '600',
   },
   quantitiesContainer: {
@@ -835,10 +865,10 @@ const styles = StyleSheet.create({
   quantityValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: colors.primary,
+    color: '#667eea',
   },
   totalQuantity: {
-    color: colors.success,
+    color: '#4CAF50',
   },
   footerRow: {
     flexDirection: 'row',
@@ -859,7 +889,7 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: colors.success,
+    color: '#4CAF50',
   },
   observacionesContainer: {
     flexDirection: 'row',
@@ -894,13 +924,13 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   buttonListo: {
-    backgroundColor: colors.success,
+    backgroundColor: '#4CAF50',
   },
   buttonEntregado: {
-    backgroundColor: colors.secondary,
+    backgroundColor: '#9C27B0',
   },
   buttonText: {
-    color: colors.textInverse,
+    color: '#fff',
     fontWeight: '600',
     fontSize: 15,
   },
@@ -929,7 +959,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   tooltipText: {
-    color: colors.textInverse,
+    color: '#fff',
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 16,
@@ -962,16 +992,14 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   emptyState: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
-    paddingTop: 100,
+    paddingTop: 40,
   },
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-  color: colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: 16,
     marginBottom: 8,
   },
@@ -979,6 +1007,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  bottomSpacing: {
+    height: 20,
   },
 });
 

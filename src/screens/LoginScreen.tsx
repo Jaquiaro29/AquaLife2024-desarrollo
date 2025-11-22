@@ -84,9 +84,12 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
       // 3) Iniciar correctamente
       setLoading(false);
       showToast('success', 'Inicio de sesión exitoso. Accediendo...');
-      // Redirige según el userType
+      // Redirige según el userType. Usar replace/reset para evitar que la pila vuelva a Home al recargar.
       if (userType === 'cliente' || userType === 'admin') {
-        navigation.navigate('MainDrawer', { userType });
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'MainDrawer', params: { userType } }],
+        });
       } else {
         showToast('error', 'Tipo de usuario desconocido.');
       }
