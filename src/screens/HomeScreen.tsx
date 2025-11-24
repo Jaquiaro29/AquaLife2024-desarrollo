@@ -92,7 +92,7 @@ const HomeScreen = ({ navigation }: any) => {
         {/* Hero Section */}
         <Animated.View style={[styles.heroSection, { opacity: fadeAnim }]}>
           <LinearGradient
-            colors={['rgba(13, 148, 136, 0.1)', 'rgba(13, 148, 136, 0.05)']}
+            colors={[colors.primaryShades[50], colors.surface]}
             style={styles.heroGradient}
           >
             <View style={styles.heroContent}>
@@ -283,7 +283,7 @@ const HomeScreen = ({ navigation }: any) => {
 
         {/* Footer */}
         <LinearGradient
-          colors={['#0D9488', '#0F766E']}
+          colors={colors.gradientPrimary}
           style={styles.footer}
         >
           <Text style={styles.footerTitle}>AquaLife</Text>
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   ctaText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -454,13 +454,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: 8,
   },
   sectionSubtitle: {
     fontSize: 16,
-    color: '#64748b',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 40,
   },
@@ -492,13 +492,13 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: colors.textPrimary,
     marginBottom: 8,
     textAlign: 'center',
   },
   featureDescription: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
   missionTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.textInverse,
     textAlign: 'center',
     marginBottom: 40,
   },
@@ -552,13 +552,13 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: colors.textPrimary,
     marginBottom: 12,
     textAlign: 'center',
   },
   cardText: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -569,13 +569,13 @@ const styles = StyleSheet.create({
   carouselTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: 8,
   },
   carouselSubtitle: {
     fontSize: 16,
-    color: '#64748b',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: 30,
   },
@@ -598,12 +598,12 @@ const styles = StyleSheet.create({
   locationTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   locationSubtitle: {
     fontSize: 16,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginBottom: 30,
   },
   locationDetail: {
@@ -617,7 +617,7 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   mapPlaceholder: {

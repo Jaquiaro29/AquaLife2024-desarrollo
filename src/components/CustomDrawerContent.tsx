@@ -1,6 +1,7 @@
 import React from 'react';
 import { DrawerContentScrollView, DrawerItem } from '@react-navigation/drawer';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { colors } from '../styles/globalStyles';
 import { getAuth, signOut } from 'firebase/auth';
 
 interface Props {
@@ -99,7 +100,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#0D9488',
+    backgroundColor: colors.primary,
   },
   logo: {
     width: 50,
@@ -108,18 +109,18 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: 'bold',
   },
   logoutButton: {
     marginTop: 20,
     padding: 10,
     alignItems: 'center',
-    backgroundColor: '#FF5252',
+    backgroundColor: colors.error,
     borderRadius: 8,
   },
   logoutText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: 'bold',
     fontSize: 16,
   },

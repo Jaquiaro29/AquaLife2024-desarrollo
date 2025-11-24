@@ -1223,7 +1223,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   tipoButtonTextSelected: {
-    color: '#fff',
+    color: colors.textInverse,
   },
   loadingContainer: {
     alignItems: 'center',
@@ -1400,7 +1400,7 @@ const styles = StyleSheet.create({
   },
   emptyGridText: {
     marginTop: 15,
-    color: '#666',
+    color: colors.textSecondary,
     fontSize: 14,
     textAlign: 'center',
   },

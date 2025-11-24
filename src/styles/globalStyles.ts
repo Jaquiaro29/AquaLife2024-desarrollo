@@ -2,17 +2,17 @@ import { StyleSheet, Dimensions } from "react-native";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-// Paleta de colores moderna y consistente
+// Paleta de colores (alineada con el estilo visual del Dashboard)
 const colors = {
-  // Colores primarios - Verde AquaLife
-  primary: "#0D9488",
-  primaryLight: "#34D0C3",
-  primaryDark: "#07665C",
+  // Colores primarios (dashboard: indigo / morado)
+  primary: "#667eea",
+  primaryLight: "#8b93f5",
+  primaryDark: "#4f58d6",
   
-  // Colores secundarios y acentos
-  secondary: "#3B82F6",
-  secondaryLight: "#60A5FA",
-  secondaryDark: "#1D4ED8",
+  // Colores secundarios y acentos (complemento morado)
+  secondary: "#764ba2",
+  secondaryLight: "#8f6fcf",
+  secondaryDark: "#5a2f83",
   
   // Colores neutros
   background: "#FFFFFF",
@@ -20,16 +20,16 @@ const colors = {
   card: "#FFFFFF",
   
   // Texto
-  textPrimary: "#1E293B",
+  textPrimary: "#0F1724",
   textSecondary: "#64748B",
   textTertiary: "#94A3B8",
   textInverse: "#FFFFFF",
   
-  // Estados y feedback
-  success: "#10B981",
-  error: "#EF4444",
-  warning: "#F59E0B",
-  info: "#3B82F6",
+  // Estados y feedback (usados en Dashboard)
+  success: "#4CAF50",
+  error: "#DC2626",
+  warning: "#D97706",
+  info: "#2196F3",
   disabled: "#CBD5E1",
   
   // Bordes y separadores
@@ -37,23 +37,23 @@ const colors = {
   borderLight: "#F1F5F9",
   borderDark: "#CBD5E1",
   
-  // Gradientes
-  gradientPrimary: ["#0D9488", "#0F766E", "#0D9488"],
-  gradientSecondary: ["#3B82F6", "#1D4ED8"],
-  gradientSuccess: ["#10B981", "#059669"],
+  // Gradientes (header / cards en Dashboard)
+  gradientPrimary: ["#667eea", "#764ba2"],
+  gradientSecondary: ["#667eea", "#764ba2"],
+  gradientSuccess: ["#4CAF50", "#45a049"],
   
   // Shades para consistencia
   primaryShades: {
-    50: '#F0FDFA',
-    100: '#CCFBF1',
-    200: '#99F6E4',
-    300: '#5EEAD4',
-    400: '#2DD4BF',
-    500: '#0D9488', // Color base
-    600: '#0F766E',
-    700: '#115E59',
-    800: '#134E4A',
-    900: '#134E4A',
+    50: '#F2F3FF',
+    100: '#E6E8FF',
+    200: '#CFCFFB',
+    300: '#B8B8F6',
+    400: '#9F9FF0',
+    500: '#667eea', // Color base (dashboard)
+    600: '#5b6fe0',
+    700: '#4f58d6',
+    800: '#3f44b7',
+    900: '#2f328f',
   },
   
   grayShades: {
