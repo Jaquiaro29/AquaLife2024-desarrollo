@@ -73,6 +73,12 @@ const CreateUserScreen = () => {
 
   // Estados para búsqueda y filtros
   const [searchQuery, setSearchQuery] = useState('');
+  // Maneja y sanitiza el texto del buscador: solo letras, números y espacios
+  const handleSearchChange = (text: string) => {
+    // Permite letras (incluye acentos latinos), números y espacios
+    const sanitized = text.replace(/[^0-9A-Za-z\u00C0-\u017F\s]/g, '');
+    setSearchQuery(sanitized);
+  };
   const [activeTab, setActiveTab] = useState<'todos' | 'admins' | 'clientes'>('todos');
   const [filteredUsuarios, setFilteredUsuarios] = useState<UsuarioDoc[]>([]);
   const [filteredClientes, setFilteredClientes] = useState<ClienteDoc[]>([]);
@@ -734,9 +740,9 @@ const CreateUserScreen = () => {
               <FontAwesome5 name="search" size={16} color={colors.textSecondary} style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Buscar por nombre, cédula, email..."
+                placeholder="Buscar por nombre o cédula"
                 value={searchQuery}
-                onChangeText={setSearchQuery}
+                onChangeText={handleSearchChange}
               />
               {searchQuery.length > 0 && (
                   <TouchableOpacity onPress={() => setSearchQuery('')}>
