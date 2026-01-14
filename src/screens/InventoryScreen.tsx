@@ -199,14 +199,13 @@ const InventoryScreen = () => {
   };
 
   // Seleccionar un artículo para ver subcolección "Movimientos"
-  const handleSelectItem = async (id: string, forceReload = false) => {
-    if (!forceReload && selectedItem?.id === id) {
-      // Si es el mismo y no es recarga forzada, deselecciona
+  const handleSelectItem = async (id: string) => {
+    if (selectedItem?.id === id) {
+      // Si es el mismo, deselecciona
       setSelectedItem(null);
       setMovimientos([]);
       return;
     }
-
     setSelectedItem({ id });
 
     // Cargar subcolección Movimientos
@@ -250,13 +249,7 @@ const InventoryScreen = () => {
           throw new Error('El artículo no existe.');
         }
 
-        const currentCantidadRaw = itemSnap.data()?.cantidad ?? 0;
-        const currentCantidad = Number(currentCantidadRaw);
-
-        if (Number.isNaN(currentCantidad)) {
-          throw new Error('La cantidad almacenada no es numérica.');
-        }
-
+        const currentCantidad = (itemSnap.data()?.cantidad ?? 0) as number;
         const nuevaCantidad = currentCantidad + delta;
 
         if (nuevaCantidad < 0) {
@@ -279,7 +272,7 @@ const InventoryScreen = () => {
       setObsMovimiento('');
       setShowMovimientoModal(false);
       // recargar movimientos
-      handleSelectItem(selectedItem.id, true);
+      handleSelectItem(selectedItem.id);
     } catch (error: any) {
       console.error(error);
       const message = error?.message || 'No se pudo registrar el movimiento.';
