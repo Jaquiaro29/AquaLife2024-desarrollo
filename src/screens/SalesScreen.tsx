@@ -13,6 +13,7 @@ import {
   StatusBar,
   Alert
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { formatCurrency } from '../utils/currency';
@@ -65,6 +66,86 @@ const SalesScreen = () => {
   const [searchYear, setSearchYear] = useState('');   // YYYY
   const [rangeFrom, setRangeFrom] = useState('');     // YYYY-MM-DD
   const [rangeTo, setRangeTo] = useState('');         // YYYY-MM-DD
+
+  // Date picker UI
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerTarget, setDatePickerTarget] = useState<'day' | 'week' | 'month' | 'year' | 'from' | 'to'>('day');
+  const [tempDate, setTempDate] = useState(new Date());
+
+  // Helpers de sanitización (no tocar formatos de fecha)
+  const sanitizeNumeric = (text: string) => text.replace(/[^0-9]/g, '');
+  const sanitizeName = (text: string) => text.replace(/[^A-Za-z\u00C0-\u017F\s]/g, '');
+  const sanitizeYMD = (text: string) => text.replace(/[^0-9-]/g, '').slice(0, 10);
+  const sanitizeYM = (text: string) => {
+    const cleaned = text.replace(/[^0-9-]/g, '');
+    const [yearRaw = '', monthRaw = ''] = cleaned.split('-');
+    const year = yearRaw.slice(0, 4);
+    const month = monthRaw.slice(0, 2);
+    return month ? `${year}-${month}` : year;
+  };
+  const sanitizeY = (text: string) => text.replace(/[^0-9]/g, '').slice(0, 4);
+
+  // Helpers de fecha
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const formatYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const formatYM = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+  const formatY = (d: Date) => `${d.getFullYear()}`;
+
+  const startOfWeekMonday = (d: Date) => {
+    const day = d.getDay(); // 0 dom, 1 lun
+    const diff = (day === 0 ? -6 : 1 - day); // mover al lunes
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diff);
+    return monday;
+  };
+
+  const openPicker = (target: typeof datePickerTarget) => {
+    setDatePickerTarget(target);
+    let base = new Date();
+    switch (target) {
+      case 'day': base = searchDay ? new Date(searchDay) : base; break;
+      case 'week': base = searchWeek ? new Date(searchWeek) : base; break;
+      case 'month': base = searchMonth ? new Date(`${searchMonth}-01`) : base; break;
+      case 'year': base = searchYear ? new Date(`${searchYear}-01-01`) : base; break;
+      case 'from': base = rangeFrom ? new Date(rangeFrom) : base; break;
+      case 'to': base = rangeTo ? new Date(rangeTo) : base; break;
+    }
+    setTempDate(base);
+    setShowDatePicker(true);
+  };
+
+  const handleDateChange = (_: any, selected?: Date) => {
+    setShowDatePicker(false);
+    if (!selected) return;
+    switch (datePickerTarget) {
+      case 'day':
+        setSearchDay(formatYMD(selected));
+        setSearchMode('dia');
+        break;
+      case 'week': {
+        const monday = startOfWeekMonday(selected);
+        setSearchWeek(formatYMD(monday));
+        setSearchMode('semana');
+        break;
+      }
+      case 'month':
+        setSearchMonth(formatYM(selected));
+        setSearchMode('mes');
+        break;
+      case 'year':
+        setSearchYear(formatY(selected));
+        setSearchMode('ano');
+        break;
+      case 'from':
+        setRangeFrom(formatYMD(selected));
+        setSearchMode('rango');
+        break;
+      case 'to':
+        setRangeTo(formatYMD(selected));
+        setSearchMode('rango');
+        break;
+    }
+  };
 
   // Resultados filtrados
   const [filteredPedidos, setFilteredPedidos] = useState<PedidoDoc[]>([]);
@@ -264,7 +345,7 @@ const SalesScreen = () => {
                   style={styles.input}
                   placeholder="Cédula del cliente"
                   value={cedulaFilter}
-                  onChangeText={setCedulaFilter}
+                  onChangeText={(text) => setCedulaFilter(sanitizeNumeric(text))}
                   keyboardType="numeric"
                 />
               </View>
@@ -274,7 +355,7 @@ const SalesScreen = () => {
                   style={styles.input}
                   placeholder="Nombre del cliente"
                   value={nombreFilter}
-                  onChangeText={setNombreFilter}
+                  onChangeText={(text) => setNombreFilter(sanitizeName(text))}
                 />
               </View>
             </View>
@@ -329,7 +410,7 @@ const SalesScreen = () => {
                     style={styles.input}
                     placeholder="YYYY-MM-DD"
                     value={searchDay}
-                    onChangeText={setSearchDay}
+                    onChangeText={(text) => setSearchDay(sanitizeYMD(text))}
                   />
                 </View>
               )}
@@ -340,7 +421,7 @@ const SalesScreen = () => {
                     style={styles.input}
                     placeholder="Fecha del lunes (YYYY-MM-DD)"
                     value={searchWeek}
-                    onChangeText={setSearchWeek}
+                    onChangeText={(text) => setSearchWeek(sanitizeYMD(text))}
                   />
                 </View>
               )}
@@ -351,7 +432,7 @@ const SalesScreen = () => {
                     style={styles.input}
                     placeholder="YYYY-MM (ej. 2025-03)"
                     value={searchMonth}
-                    onChangeText={setSearchMonth}
+                    onChangeText={(text) => setSearchMonth(sanitizeYM(text))}
                   />
                 </View>
               )}
@@ -362,7 +443,7 @@ const SalesScreen = () => {
                     style={styles.input}
                     placeholder="YYYY (ej. 2025)"
                     value={searchYear}
-                    onChangeText={setSearchYear}
+                    onChangeText={(text) => setSearchYear(sanitizeY(text))}
                   />
                 </View>
               )}
@@ -374,7 +455,7 @@ const SalesScreen = () => {
                       style={styles.input}
                       placeholder="Desde (YYYY-MM-DD)"
                       value={rangeFrom}
-                      onChangeText={setRangeFrom}
+                      onChangeText={(text) => setRangeFrom(sanitizeYMD(text))}
                     />
                   </View>
                   <View style={styles.inputContainer}>
@@ -383,7 +464,7 @@ const SalesScreen = () => {
                       style={styles.input}
                       placeholder="Hasta (YYYY-MM-DD)"
                       value={rangeTo}
-                      onChangeText={setRangeTo}
+                      onChangeText={(text) => setRangeTo(sanitizeYMD(text))}
                     />
                   </View>
                 </View>

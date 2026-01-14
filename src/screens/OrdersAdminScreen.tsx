@@ -12,6 +12,7 @@ import {
   Platform,
   Alert,
   ScrollView,
+  Modal,
   StatusBar,
   Dimensions,
 } from 'react-native';
@@ -23,14 +24,19 @@ import {
   doc,
   updateDoc,
   getDocs,
+  addDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { globalStyles, colors } from '../styles/globalStyles';
 import { formatCurrency } from '../utils/currency';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
+import { useGlobalConfig } from '../hooks/useGlobalConfig';
+import { getNextOrderNumber } from '../components/getNextOrderNumber';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 // ===== Interfaces / tipos =====
 interface Pedido {
@@ -46,6 +52,8 @@ interface Pedido {
   estado: string;         
   empleadoAsignadoId: string;
   observaciones: string;
+  createdAt?: any;
+  firstResponseAt?: any;
 }
 
 interface Cliente {
@@ -53,6 +61,16 @@ interface Cliente {
   direccion?: string;
   email?: string;
   telefono?: string;
+  cedula?: string;
+}
+
+// Interfaz para nuevo pedido desde admin
+interface AdminOrder {
+  withHandle: number;
+  withoutHandle: number;
+  type: 'recarga' | 'intercambio';
+  comments: string;
+  priority: 'alta' | 'normal';
 }
 
 // Para items en la FlatList
@@ -90,6 +108,7 @@ function getEstadoPriority(estado: string): number {
 
 // ===== Componente principal =====
 const OrdersAdminScreen = () => {
+  const navigation = useNavigation<any>();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [clientesMap, setClientesMap] = useState<Record<string, Cliente>>({});
   const [loading, setLoading] = useState<boolean>(true);
@@ -100,6 +119,23 @@ const OrdersAdminScreen = () => {
   const [tapasDocId, setTapasDocId] = useState<string>('');
   const [activeFilter, setActiveFilter] = useState<string>('todos');
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
+
+  // Crear pedido (modal)
+  const [showCreateOrderModal, setShowCreateOrderModal] = useState<boolean>(false);
+  const [creatingOrder, setCreatingOrder] = useState<boolean>(false);
+  const [orderForm, setOrderForm] = useState<AdminOrder>({
+    withHandle: 0,
+    withoutHandle: 0,
+    type: 'recarga',
+    comments: '',
+    priority: 'normal',
+  });
+  const [clienteSearch, setClienteSearch] = useState<string>('');
+  const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
+  const [selectedClienteName, setSelectedClienteName] = useState<string>('');
+
+  // Precios globales
+  const { botellonPrice, botellonPriceHigh } = useGlobalConfig();
 
   // ===== 1) Suscribirse a la colección "Pedidos" =====
   useEffect(() => {
@@ -203,6 +239,105 @@ const OrdersAdminScreen = () => {
     }
   }, [sellosCantidad, tapasCantidad]);
 
+  // Limpiar símbolos en inputs de búsqueda (solo letras/acentos, números y espacios)
+  const sanitizeSearch = (text: string) => text.replace(/[^0-9A-Za-z\u00C0-\u017F\s]/g, '');
+
+  // ===== Helpers Crear Pedido =====
+  const clientesList = Object.entries(clientesMap).map(([id, data]) => ({ id, ...data }));
+  const filteredClientes = clientesList.filter(c => {
+    const q = clienteSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (c.nombre || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) ||
+      (c.telefono || '').toLowerCase().includes(q) ||
+      String(c.cedula || '').toLowerCase().includes(q)
+    );
+  });
+
+  const handleOrderChange = <T extends keyof AdminOrder>(field: T, value: AdminOrder[T]) => {
+    setOrderForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const increment = (type: 'withHandle' | 'withoutHandle') => {
+    setOrderForm(prev => ({ ...prev, [type]: prev[type] + 1 }));
+  };
+
+  const decrement = (type: 'withHandle' | 'withoutHandle') => {
+    setOrderForm(prev => ({ ...prev, [type]: Math.max(0, prev[type] - 1) }));
+  };
+
+  const totalBottlesNew = orderForm.withHandle + orderForm.withoutHandle;
+  const PRIORITY_MULTIPLIER: Record<string, number> = { normal: 1, alta: 1.4 };
+  const basePrice = (typeof botellonPrice === 'number' && !isNaN(botellonPrice)) ? botellonPrice : 0.5;
+  const highPriceAvailable = (typeof botellonPriceHigh === 'number' && !isNaN(botellonPriceHigh));
+  const costPerBottleNew = orderForm.priority === 'alta'
+    ? (highPriceAvailable ? botellonPriceHigh! : basePrice * PRIORITY_MULTIPLIER.alta)
+    : basePrice * PRIORITY_MULTIPLIER.normal;
+  const totalPriceNew = totalBottlesNew * costPerBottleNew;
+
+  const openCreateOrderModal = () => {
+    setShowCreateOrderModal(true);
+  };
+
+  const closeCreateOrderModal = () => {
+    setShowCreateOrderModal(false);
+    setCreatingOrder(false);
+    setOrderForm({ withHandle: 0, withoutHandle: 0, type: 'recarga', comments: '', priority: 'normal' });
+    setClienteSearch('');
+    setSelectedClienteId(null);
+    setSelectedClienteName('');
+  };
+
+  const handleSelectCliente = (id: string) => {
+    setSelectedClienteId(id);
+    const name = clientesMap[id]?.nombre || '';
+    setSelectedClienteName(name);
+  };
+
+  const handleCreateOrderFromAdmin = async () => {
+    if (!selectedClienteId) {
+      showMessage('Cliente requerido', 'Seleccione un cliente para crear el pedido.');
+      return;
+    }
+    if (totalBottlesNew === 0) {
+      showMessage('Cantidad inválida', 'La cantidad total de botellones debe ser mayor a 0.');
+      return;
+    }
+
+    setCreatingOrder(true);
+    try {
+      const now = new Date();
+      const fecha = now.toISOString().split('T')[0];
+      const hora = now.toTimeString().split(' ')[0];
+      const numeroPedido = await getNextOrderNumber(db);
+
+      const nuevoPedido = {
+        clienteId: selectedClienteId,
+        fecha,
+        hora,
+        cantidadConAsa: orderForm.withHandle,
+        cantidadSinAsa: orderForm.withoutHandle,
+        costoUnitario: costPerBottleNew,
+        total: totalPriceNew,
+        estado: 'pendiente',
+        empleadoAsignadoId: 'admin',
+        observaciones: orderForm.comments,
+        numeroPedido,
+        createdAt: serverTimestamp(),
+      };
+
+      await addDoc(collection(db, 'Pedidos'), nuevoPedido);
+      showMessage('Éxito', `Pedido creado para ${selectedClienteName || 'cliente'}.`);
+      closeCreateOrderModal();
+    } catch (error) {
+      console.error('Error al crear pedido desde admin:', error);
+      showMessage('Error', 'No se pudo crear el pedido. Intenta nuevamente.');
+    } finally {
+      setCreatingOrder(false);
+    }
+  };
+
   // ===== Manejar cambio de estado de un pedido =====
   const handleChangeEstado = async (pedidoId: string, nuevoEstado: string) => {
     try {
@@ -256,7 +391,12 @@ const OrdersAdminScreen = () => {
 
       // Ahora sí, actualizar el estado del pedido
       const pedidoRef = doc(db, 'Pedidos', pedidoId);
-      await updateDoc(pedidoRef, { estado: nuevoEstado });
+      const updatePayload: Record<string, any> = { estado: nuevoEstado };
+      // Set firstResponseAt when leaving 'pendiente' for the first time
+      if (pedido.estado === 'pendiente' && nuevoEstado !== 'pendiente' && !pedido.firstResponseAt) {
+        updatePayload.firstResponseAt = serverTimestamp();
+      }
+      await updateDoc(pedidoRef, updatePayload);
 
       console.log(`Estado del pedido ${pedidoId} → ${nuevoEstado}`);
     } catch (error) {
@@ -505,6 +645,13 @@ const OrdersAdminScreen = () => {
 
         {/* Contenido principal */}
         <View style={styles.content}>
+          {/* Botón Crear Pedido */}
+          <View style={styles.createOrderBar}>
+            <TouchableOpacity style={styles.createOrderButton} onPress={openCreateOrderModal}>
+              <Ionicons name="add-circle" size={18} color={colors.textInverse} />
+              <Text style={styles.createOrderButtonText}>Crear Pedido</Text>
+            </TouchableOpacity>
+          </View>
           {/* Dashboard Stats */}
           <ScrollView 
             horizontal 
@@ -552,7 +699,7 @@ const OrdersAdminScreen = () => {
                 style={styles.searchInput}
                 placeholder="Buscar por Nº de pedido o cliente..."
                 value={searchText}
-                onChangeText={setSearchText}
+                onChangeText={(text) => setSearchText(sanitizeSearch(text))}
                 placeholderTextColor={colors.textSecondary}
               />
             </View>
@@ -631,6 +778,173 @@ const OrdersAdminScreen = () => {
           <View style={styles.bottomSpacing} />
         </View>
       </ScrollView>
+
+      {/* Modal Crear Pedido */}
+      <Modal visible={showCreateOrderModal} animationType="slide" transparent>
+        <View style={styles.modalOverlayAdmin}>
+          <View style={[styles.modalContentAdmin, { maxHeight: height * 0.9 }]}>
+            <Text style={styles.modalTitleAdmin}>Nuevo Pedido</Text>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {/* Selector de Cliente */}
+              <View style={styles.sectionAdmin}>
+                <Text style={styles.sectionTitleAdmin}>Cliente</Text>
+                <TextInput
+                  style={styles.searchInputAdmin}
+                  placeholder="Buscar por nombre, cédula, email o teléfono"
+                  placeholderTextColor={colors.textSecondary}
+                  value={clienteSearch}
+                  onChangeText={(text) => setClienteSearch(sanitizeSearch(text))}
+                />
+                <ScrollView style={styles.clientesList} keyboardShouldPersistTaps="handled">
+                  {filteredClientes.map((c) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[
+                        styles.clienteItem,
+                        selectedClienteId === c.id && styles.clienteItemSelected,
+                      ]}
+                      onPress={() => handleSelectCliente(c.id)}
+                    >
+                      <Ionicons name="person" size={16} color={colors.textSecondary} />
+                      <Text style={styles.clienteItemText}>
+                        {c.nombre || 'Sin nombre'}{c.cedula ? ` • ${c.cedula}` : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                <TouchableOpacity
+                  style={styles.registerClientButton}
+                  onPress={() => {
+                    closeCreateOrderModal();
+                    navigation.navigate('Create', { userType: 'admin', openForm: true });
+                  }}
+                >
+                  <Ionicons name="person-add" size={16} color={colors.primary} />
+                  <Text style={styles.registerClientText}>Registrar nuevo cliente</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Tipo de Servicio */}
+              <View style={styles.sectionAdmin}>
+                <Text style={styles.sectionTitleAdmin}>Tipo de Servicio</Text>
+                <View style={styles.typeButtonsAdmin}>
+                  <TouchableOpacity
+                    style={[styles.typeButtonAdmin, orderForm.type === 'recarga' && styles.typeButtonActiveAdmin]}
+                    onPress={() => handleOrderChange('type', 'recarga')}
+                  >
+                    <Text style={[styles.typeButtonTextAdmin, orderForm.type === 'recarga' && styles.typeButtonTextActiveAdmin]}>🔄 Recarga</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.typeButtonAdmin, orderForm.type === 'intercambio' && styles.typeButtonActiveAdmin]}
+                    onPress={() => handleOrderChange('type', 'intercambio')}
+                  >
+                    <Text style={[styles.typeButtonTextAdmin, orderForm.type === 'intercambio' && styles.typeButtonTextActiveAdmin]}>💧 Intercambio</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Cantidades */}
+              <View style={styles.sectionAdmin}>
+                <Text style={styles.sectionTitleAdmin}>Cantidad de Botellones</Text>
+                <View style={styles.quantityRowAdmin}>
+                  <View style={styles.quantityCardAdmin}>
+                    <Text style={styles.quantityTitleAdmin}>🫙 Con Asa</Text>
+                    <View style={styles.quantityControlsAdmin}>
+                      <TouchableOpacity style={styles.quantityButtonAdmin} onPress={() => decrement('withHandle')}>
+                        <Text style={styles.quantityButtonTextAdmin}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.quantityValueAdmin}>{orderForm.withHandle}</Text>
+                      <TouchableOpacity style={styles.quantityButtonAdmin} onPress={() => increment('withHandle')}>
+                        <Text style={styles.quantityButtonTextAdmin}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  <View style={styles.quantityCardAdmin}>
+                    <Text style={styles.quantityTitleAdmin}>💧 Sin Asa</Text>
+                    <View style={styles.quantityControlsAdmin}>
+                      <TouchableOpacity style={styles.quantityButtonAdmin} onPress={() => decrement('withoutHandle')}>
+                        <Text style={styles.quantityButtonTextAdmin}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.quantityValueAdmin}>{orderForm.withoutHandle}</Text>
+                      <TouchableOpacity style={styles.quantityButtonAdmin} onPress={() => increment('withoutHandle')}>
+                        <Text style={styles.quantityButtonTextAdmin}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+                <Text style={styles.totalAdmin}>Total: {totalBottlesNew}</Text>
+              </View>
+
+              {/* Prioridad */}
+              <View style={styles.sectionAdmin}>
+                <Text style={styles.sectionTitleAdmin}>Prioridad</Text>
+                <View style={styles.priorityRowAdmin}>
+                  <TouchableOpacity
+                    style={[styles.priorityButtonAdmin, orderForm.priority === 'normal' && styles.priorityButtonActiveAdmin]}
+                    onPress={() => handleOrderChange('priority', 'normal')}
+                  >
+                    <Text style={styles.priorityTitleAdmin}>⏱️ Normal</Text>
+                    <Text style={styles.priorityPriceAdmin}>{formatCurrency(basePrice * PRIORITY_MULTIPLIER.normal)} c/u</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.priorityButtonAdmin, orderForm.priority === 'alta' && styles.priorityButtonActiveAdmin]}
+                    onPress={() => handleOrderChange('priority', 'alta')}
+                  >
+                    <Text style={styles.priorityTitleAdmin}>⚡ Alta</Text>
+                    <Text style={styles.priorityPriceAdmin}>{formatCurrency(highPriceAvailable ? botellonPriceHigh! : basePrice * PRIORITY_MULTIPLIER.alta)} c/u</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Comentarios */}
+              <View style={styles.sectionAdmin}>
+                <Text style={styles.sectionTitleAdmin}>Comentarios</Text>
+                <TextInput
+                  style={styles.commentsInputAdmin}
+                  placeholder="¿Alguna instrucción especial?"
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={3}
+                  value={orderForm.comments}
+                  onChangeText={(t) => handleOrderChange('comments', t)}
+                />
+              </View>
+
+              {/* Resumen */}
+              <View style={styles.summaryAdmin}>
+                <Text style={styles.summaryTitleAdmin}>Resumen</Text>
+                <View style={styles.summaryRowAdmin}>
+                  <Text style={styles.summaryLabelAdmin}>Botellones:</Text>
+                  <Text style={styles.summaryValueAdmin}>{totalBottlesNew}</Text>
+                </View>
+                <View style={styles.summaryRowAdmin}>
+                  <Text style={styles.summaryLabelAdmin}>Costo unitario:</Text>
+                  <Text style={styles.summaryValueAdmin}>{formatCurrency(costPerBottleNew)}</Text>
+                </View>
+                <View style={styles.summaryRowAdmin}>
+                  <Text style={styles.summaryLabelAdmin}>Total:</Text>
+                  <Text style={styles.summaryTotalAdmin}>{formatCurrency(totalPriceNew)}</Text>
+                </View>
+              </View>
+
+              {/* Botones */}
+              <View style={styles.modalButtonsAdmin}>
+                <TouchableOpacity style={styles.modalButtonCancelAdmin} onPress={closeCreateOrderModal}>
+                  <Text style={styles.modalButtonTextCancelAdmin}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalButtonConfirmAdmin} onPress={handleCreateOrderFromAdmin} disabled={creatingOrder || totalBottlesNew === 0 || !selectedClienteId}>
+                  {creatingOrder ? (
+                    <ActivityIndicator color={colors.textInverse} />
+                  ) : (
+                    <Text style={styles.modalButtonTextConfirmAdmin}>Crear Pedido</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1010,6 +1324,258 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 20,
+  },
+  // ===== Crear Pedido (Admin) =====
+  createOrderBar: {
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  createOrderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  createOrderButtonText: {
+    color: colors.textInverse,
+    fontWeight: '600',
+  },
+  modalOverlayAdmin: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContentAdmin: {
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 500,
+  },
+  modalTitleAdmin: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  sectionAdmin: {
+    backgroundColor: colors.surface,
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  sectionTitleAdmin: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 8,
+  },
+  searchInputAdmin: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.textPrimary,
+    marginBottom: 10,
+  },
+  clientesList: {
+    maxHeight: 160,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    padding: 6,
+  },
+  clienteItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+  },
+  clienteItemSelected: {
+    backgroundColor: colors.secondaryLight,
+  },
+  clienteItemText: {
+    color: colors.textPrimary,
+    fontSize: 14,
+  },
+  registerClientButton: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  registerClientText: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  typeButtonsAdmin: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  typeButtonAdmin: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  typeButtonActiveAdmin: {
+    backgroundColor: colors.secondaryLight,
+    borderColor: colors.secondary,
+  },
+  typeButtonTextAdmin: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  typeButtonTextActiveAdmin: {
+    color: colors.secondaryDark,
+  },
+  quantityRowAdmin: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  quantityCardAdmin: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 12,
+  },
+  quantityTitleAdmin: {
+    color: colors.textPrimary,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  quantityControlsAdmin: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  quantityButtonAdmin: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityButtonTextAdmin: {
+    color: colors.textInverse,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  quantityValueAdmin: {
+    color: colors.textPrimary,
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  totalAdmin: {
+    marginTop: 8,
+    textAlign: 'center',
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  priorityRowAdmin: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  priorityButtonAdmin: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  priorityButtonActiveAdmin: {
+    backgroundColor: '#fef3c7',
+    borderColor: colors.warning,
+  },
+  priorityTitleAdmin: {
+    color: colors.textPrimary,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  priorityPriceAdmin: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  commentsInputAdmin: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    padding: 12,
+    color: colors.textPrimary,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    backgroundColor: colors.background,
+  },
+  summaryAdmin: {
+    backgroundColor: colors.textPrimary,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  summaryTitleAdmin: {
+    color: colors.textInverse,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  summaryRowAdmin: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  summaryLabelAdmin: {
+    color: colors.grayShades[100],
+  },
+  summaryValueAdmin: {
+    color: colors.textInverse,
+    fontWeight: '500',
+  },
+  summaryTotalAdmin: {
+    color: colors.success,
+    fontWeight: 'bold',
+    fontSize: 18,
+  },
+  modalButtonsAdmin: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButtonCancelAdmin: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: colors.grayShades[50],
+    alignItems: 'center',
+  },
+  modalButtonConfirmAdmin: {
+    flex: 2,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+  },
+  modalButtonTextCancelAdmin: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  modalButtonTextConfirmAdmin: {
+    color: colors.textInverse,
+    fontWeight: 'bold',
   },
 });
 

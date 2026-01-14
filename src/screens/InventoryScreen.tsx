@@ -22,6 +22,7 @@ import {
   updateDoc,
   deleteDoc,
   getDocs,
+  runTransaction,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
@@ -156,11 +157,11 @@ const InventoryScreen = () => {
     setShowArticuloModal(true);
   };
 
-  // Eliminar artículo con confirmación
+  // Eliminar artículo (y sus movimientos) con confirmación única
   const handleDelete = (id: string, nombre: string) => {
     Alert.alert(
       'Confirmar eliminación',
-      `¿Estás seguro de que deseas eliminar "${nombre}"?`,
+      `¿Deseas eliminar "${nombre}"? Esta acción no se puede deshacer.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -168,11 +169,28 @@ const InventoryScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Eliminar subcolección "Movimientos" primero
+              const movimientosRef = collection(db, 'Inventario', id, 'Movimientos');
+              const movSnap = await getDocs(movimientosRef);
+              const deletes = movSnap.docs.map((d) => deleteDoc(doc(db, 'Inventario', id, 'Movimientos', d.id)));
+              if (deletes.length > 0) {
+                await Promise.all(deletes);
+              }
+
+              // Eliminar artículo
               await deleteDoc(doc(db, 'Inventario', id));
+
+              // Limpiar selección si corresponde
+              if (selectedItem?.id === id) {
+                setSelectedItem(null);
+                setMovimientos([]);
+              }
+
               showToast('success', 'Artículo eliminado correctamente.');
-            } catch (err) {
+            } catch (err: any) {
               console.error(err);
-              showToast('error', 'No se pudo eliminar el artículo.');
+              const msg = err?.message ? `No se pudo eliminar: ${err.message}` : 'No se pudo eliminar el artículo.';
+              showToast('error', msg);
             }
           },
         },
@@ -181,13 +199,14 @@ const InventoryScreen = () => {
   };
 
   // Seleccionar un artículo para ver subcolección "Movimientos"
-  const handleSelectItem = async (id: string) => {
-    if (selectedItem?.id === id) {
-      // Si es el mismo, deselecciona
+  const handleSelectItem = async (id: string, forceReload = false) => {
+    if (!forceReload && selectedItem?.id === id) {
+      // Si es el mismo y no es recarga forzada, deselecciona
       setSelectedItem(null);
       setMovimientos([]);
       return;
     }
+
     setSelectedItem({ id });
 
     // Cargar subcolección Movimientos
@@ -219,13 +238,40 @@ const InventoryScreen = () => {
       showToast('error', 'Ingresa una cantidad válida para el movimiento.');
       return;
     }
+
+    const itemRef = doc(db, 'Inventario', selectedItem.id);
+    const movimientoRef = doc(collection(db, 'Inventario', selectedItem.id, 'Movimientos'));
+    const delta = tipoMovimiento === 'entrada' ? cantidadMovimiento : -cantidadMovimiento;
+
     try {
-      await addDoc(collection(db, 'Inventario', selectedItem.id, 'Movimientos'), {
-        timestamp: serverTimestamp(),
-        tipoMovimiento,
-        cantidad: cantidadMovimiento,
-        observaciones: obsMovimiento,
+      await runTransaction(db, async (transaction) => {
+        const itemSnap = await transaction.get(itemRef);
+        if (!itemSnap.exists()) {
+          throw new Error('El artículo no existe.');
+        }
+
+        const currentCantidadRaw = itemSnap.data()?.cantidad ?? 0;
+        const currentCantidad = Number(currentCantidadRaw);
+
+        if (Number.isNaN(currentCantidad)) {
+          throw new Error('La cantidad almacenada no es numérica.');
+        }
+
+        const nuevaCantidad = currentCantidad + delta;
+
+        if (nuevaCantidad < 0) {
+          throw new Error('No hay stock suficiente para registrar esta salida.');
+        }
+
+        transaction.update(itemRef, { cantidad: nuevaCantidad });
+        transaction.set(movimientoRef, {
+          timestamp: serverTimestamp(),
+          tipoMovimiento,
+          cantidad: cantidadMovimiento,
+          observaciones: obsMovimiento,
+        });
       });
+
       showToast('success', 'Movimiento registrado correctamente.');
       // limpiar form
       setTipoMovimiento('entrada');
@@ -233,10 +279,11 @@ const InventoryScreen = () => {
       setObsMovimiento('');
       setShowMovimientoModal(false);
       // recargar movimientos
-      handleSelectItem(selectedItem.id);
-    } catch (error) {
+      handleSelectItem(selectedItem.id, true);
+    } catch (error: any) {
       console.error(error);
-      showToast('error', 'No se pudo registrar el movimiento.');
+      const message = error?.message || 'No se pudo registrar el movimiento.';
+      showToast('error', message);
     }
   };
 
@@ -270,14 +317,6 @@ const InventoryScreen = () => {
         
         {/* Botones de acción */}
         <View style={styles.actionsRow}>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.editButton]} 
-            onPress={() => handleSelectEdit(item)}
-          >
-            <Ionicons name="create" size={16} color={colors.textInverse} />
-            <Text style={styles.actionButtonText}>Editar</Text>
-          </TouchableOpacity>
-          
           <TouchableOpacity 
             style={[styles.actionButton, styles.movimientoButton]} 
             onPress={() => handleOpenMovimientoModal(item.id)}

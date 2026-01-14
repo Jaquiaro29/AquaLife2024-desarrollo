@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'; 
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, Animated, Alert, Platform } from 'react-native';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { db, auth } from '../../firebaseConfig';
@@ -68,6 +68,30 @@ const DashboardScreen = () => {
   const [botellonPrice, setBotellonPrice] = useState<number | null>(null);
   const [botellonPriceHigh, setBotellonPriceHigh] = useState<number | null>(null);
   const [savingPrice, setSavingPrice] = useState(false);
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(true);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [ordersCount, setOrdersCount] = useState<number | null>(null);
+  const [weeklySalesTotal, setWeeklySalesTotal] = useState<number | null>(null);
+  const [weeklyGrowthPct, setWeeklyGrowthPct] = useState<number | null>(null);
+  const [orderTodayCount, setOrderTodayCount] = useState<number | null>(null);
+  const [orderGrowthPct, setOrderGrowthPct] = useState<number | null>(null);
+  const [avgResponseHours, setAvgResponseHours] = useState<number | null>(null);
+  const [responseDeltaHours, setResponseDeltaHours] = useState<number | null>(null);
+  const [monthlyStats, setMonthlyStats] = useState<{
+    total: number | null;
+    orders: number | null;
+    avgTicket: number | null;
+    growthPct: number | null;
+  }>({ total: null, orders: null, avgTicket: null, growthPct: null });
+
+  const showNotificationAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(`${title}\n\n${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
 
   // Simular datos de actividad reciente
   useEffect(() => {
@@ -109,6 +133,207 @@ const DashboardScreen = () => {
     };
   }, []);
 
+  // Contador en tiempo real de todos los pedidos (para la tarjeta)
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'Pedidos'), (snapshot) => {
+      setOrdersCount(snapshot.size);
+    });
+    return () => unsub();
+  }, []);
+
+  // Ventas de la semana (últimos 7 días incluyendo hoy)
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'Pedidos'), (snapshot) => {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const currentWeekStart = startOfToday - dayMs * 6; // 7 días incluyendo hoy
+      const prevWeekStart = currentWeekStart - dayMs * 7;
+      const prevWeekEnd = currentWeekStart - dayMs;
+
+      const parseFecha = (fechaStr?: string) => {
+        if (!fechaStr) return NaN;
+        const parts = fechaStr.split('-');
+        if (parts.length !== 3) return NaN;
+        const [y, m, d] = parts.map((p) => Number(p));
+        return new Date(y, (m ?? 1) - 1, d ?? 1).getTime();
+      };
+
+      let totalSemana = 0;
+      let totalSemanaAnterior = 0;
+
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data() as { total?: number; fecha?: string };
+        const t = parseFecha(data.fecha);
+        if (isNaN(t)) return;
+        if (t >= currentWeekStart && t <= startOfToday) {
+          totalSemana += data.total ?? 0;
+        } else if (t >= prevWeekStart && t <= prevWeekEnd) {
+          totalSemanaAnterior += data.total ?? 0;
+        }
+      });
+
+      setWeeklySalesTotal(totalSemana);
+      const growth = totalSemanaAnterior > 0
+        ? ((totalSemana - totalSemanaAnterior) / totalSemanaAnterior) * 100
+        : totalSemana > 0
+          ? 100
+          : null;
+      setWeeklyGrowthPct(growth);
+    });
+
+    return () => unsub();
+  }, []);
+
+  // Pedidos de hoy vs ayer para porcentaje dinámico
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'Pedidos'), (snapshot) => {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const startOfYesterday = startOfToday - dayMs;
+      const endOfYesterday = startOfToday - 1;
+
+      const parseFecha = (fechaStr?: string) => {
+        if (!fechaStr) return NaN;
+        const parts = fechaStr.split('-');
+        if (parts.length !== 3) return NaN;
+        const [y, m, d] = parts.map((p) => Number(p));
+        return new Date(y, (m ?? 1) - 1, d ?? 1).getTime();
+      };
+
+      let todayCount = 0;
+      let yesterdayCount = 0;
+
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data() as { fecha?: string };
+        const t = parseFecha(data.fecha);
+        if (isNaN(t)) return;
+        if (t >= startOfToday) {
+          todayCount += 1;
+        } else if (t >= startOfYesterday && t <= endOfYesterday) {
+          yesterdayCount += 1;
+        }
+      });
+
+      setOrderTodayCount(todayCount);
+      const growth = yesterdayCount > 0
+        ? ((todayCount - yesterdayCount) / yesterdayCount) * 100
+        : todayCount > 0
+          ? 100
+          : null;
+      setOrderGrowthPct(growth);
+    });
+
+    return () => unsub();
+  }, []);
+
+  // Métricas mensuales: total, pedidos, ticket promedio, variación vs mes anterior
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'Pedidos'), (snapshot) => {
+      const now = new Date();
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+      const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+      const prevMonthEnd = currentMonthStart - 1;
+
+      const parseFecha = (fechaStr?: string) => {
+        if (!fechaStr) return NaN;
+        const parts = fechaStr.split('-');
+        if (parts.length !== 3) return NaN;
+        const [y, m, d] = parts.map((p) => Number(p));
+        return new Date(y, (m ?? 1) - 1, d ?? 1).getTime();
+      };
+
+      let totalCur = 0;
+      let countCur = 0;
+      let totalPrev = 0;
+      let countPrev = 0;
+
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data() as { total?: number; fecha?: string };
+        const ts = parseFecha(data.fecha);
+        if (isNaN(ts)) return;
+        if (ts >= currentMonthStart) {
+          totalCur += data.total ?? 0;
+          countCur += 1;
+        } else if (ts >= prevMonthStart && ts <= prevMonthEnd) {
+          totalPrev += data.total ?? 0;
+          countPrev += 1;
+        }
+      });
+
+      const avgTicket = countCur > 0 ? totalCur / countCur : null;
+      const growthPct = totalPrev > 0 ? ((totalCur - totalPrev) / totalPrev) * 100 : null;
+
+      setMonthlyStats({
+        total: totalCur,
+        orders: countCur,
+        avgTicket,
+        growthPct,
+      });
+    });
+
+    return () => unsub();
+  }, []);
+
+  // Tiempo de respuesta promedio (última semana vs semana previa)
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'Pedidos'), (snapshot) => {
+      const toMillis = (ts: any): number => {
+        if (!ts) return NaN;
+        if (typeof ts === 'number') return ts;
+        if (typeof ts === 'string') {
+          const d = Date.parse(ts);
+          return isNaN(d) ? NaN : d;
+        }
+        if (typeof ts.toMillis === 'function') return ts.toMillis();
+        if (typeof ts.seconds === 'number') return ts.seconds * 1000 + Math.floor((ts.nanoseconds ?? 0) / 1e6);
+        return NaN;
+      };
+
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const currentWeekStart = startOfToday - dayMs * 6; // 7 días
+      const prevWeekStart = currentWeekStart - dayMs * 7;
+      const prevWeekEnd = currentWeekStart - dayMs;
+
+      let curSumHrs = 0;
+      let curCount = 0;
+      let prevSumHrs = 0;
+      let prevCount = 0;
+
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data() as any;
+        const createdMs = toMillis(data.createdAt);
+        const respondedMs = toMillis(data.firstResponseAt);
+        if (isNaN(createdMs) || isNaN(respondedMs)) return;
+        const diffHrs = (respondedMs - createdMs) / (1000 * 60 * 60);
+        if (diffHrs < 0) return;
+
+        // Clasificar por semana usando respondedMs
+        if (respondedMs >= currentWeekStart && respondedMs <= startOfToday) {
+          curSumHrs += diffHrs;
+          curCount += 1;
+        } else if (respondedMs >= prevWeekStart && respondedMs <= prevWeekEnd) {
+          prevSumHrs += diffHrs;
+          prevCount += 1;
+        }
+      });
+
+      const curAvg = curCount > 0 ? curSumHrs / curCount : null;
+      const prevAvg = prevCount > 0 ? prevSumHrs / prevCount : null;
+      setAvgResponseHours(curAvg);
+      let delta: number | null = null;
+      if (curAvg !== null && prevAvg !== null) {
+        delta = curAvg - prevAvg; // negativo = mejora
+      }
+      setResponseDeltaHours(delta);
+    });
+
+    return () => unsub();
+  }, []);
+
   // Cargar información personal del usuario autenticado
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -134,6 +359,50 @@ const DashboardScreen = () => {
 
     return () => unsubscribeAuth();
   }, []);
+
+  // Suscribir pedidos pendientes para la campana de notificaciones
+  useEffect(() => {
+    const pendingQuery = query(
+      collection(db, 'Pedidos'),
+      where('estado', 'in', ['pendiente', 'procesando'])
+    );
+
+    const unsubscribe = onSnapshot(
+      pendingQuery,
+      (snapshot) => {
+        const data: PendingOrder[] = snapshot.docs.map((doc) => {
+          const payload = doc.data() as PendingOrder;
+          return {
+            id: doc.id,
+            numeroPedido: payload.numeroPedido,
+            fecha: payload.fecha,
+            estado: payload.estado,
+          };
+        });
+
+        // Ordenar por estado y número de pedido más reciente
+        data.sort((a, b) => (b.numeroPedido ?? 0) - (a.numeroPedido ?? 0));
+
+        setPendingOrders(data);
+        setLoadingNotifications(false);
+      },
+      (error) => {
+        console.error('Error al obtener pedidos pendientes:', error);
+        setLoadingNotifications(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  const formatOrderNumber = (num?: number) => {
+    if (num === undefined || num === null) return 'N/A';
+    return num.toString().padStart(4, '0');
+  };
+
+  const handleNotificationPress = () => {
+    setShowNotifications((prev) => !prev);
+  };
 
   const getActivityIcon = (type: string) => {
     switch (type) {
@@ -195,17 +464,47 @@ const DashboardScreen = () => {
               <Text style={styles.logoText}>AQUALIFE</Text>
             </View>
             <View style={styles.headerIcons}>
-              <TouchableOpacity style={styles.iconButton}>
+              <TouchableOpacity style={styles.iconButton} onPress={handleNotificationPress}>
                 <FontAwesome5 name="bell" size={20} color={colors.textInverse} />
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationText}>3</Text>
-                </View>
+                {pendingOrders.length > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationText}>{pendingOrders.length}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconButton}>
                 <FontAwesome5 name="cog" size={20} color={colors.textInverse} />
               </TouchableOpacity>
             </View>
           </View>
+          {showNotifications && (
+            <TouchableOpacity
+              activeOpacity={1}
+              style={styles.notificationOverlay}
+              onPress={() => setShowNotifications(false)}
+            >
+              <TouchableOpacity
+                activeOpacity={1}
+                style={styles.notificationPanel}
+                onPress={() => {}}
+              >
+                <Text style={styles.notificationTitle}>Pedidos pendientes</Text>
+                {loadingNotifications && <Text style={styles.notificationTextDark}>Cargando...</Text>}
+                {!loadingNotifications && pendingOrders.length === 0 && (
+                  <Text style={styles.notificationTextDark}>No hay pedidos pendientes</Text>
+                )}
+                {!loadingNotifications && pendingOrders.length > 0 && pendingOrders.slice(0, 5).map((order) => (
+                  <View key={order.id} style={styles.notificationItem}>
+                    <Text style={styles.notificationItemTitle}>#{formatOrderNumber(order.numeroPedido)}</Text>
+                    <Text style={styles.notificationItemSubtitle}>{order.estado ?? 'pendiente'} • {order.fecha ?? 'sin fecha'}</Text>
+                  </View>
+                ))}
+                {!loadingNotifications && pendingOrders.length > 5 && (
+                  <Text style={styles.notificationTextDark}>...y {pendingOrders.length - 5} más</Text>
+                )}
+              </TouchableOpacity>
+            </TouchableOpacity>
+          )}
           <View style={styles.userInfo}>
             <Text style={styles.welcomeText}>Bienvenido,</Text>
             <Text style={styles.userName}>{userData.nombre || 'Usuario'}</Text>
@@ -256,8 +555,10 @@ const DashboardScreen = () => {
                 <FontAwesome5 name="box" size={24} color="#fff" />
               </View>
               <Text style={styles.cardTitle}>Pedidos</Text>
-              <Text style={styles.cardValue}>20</Text>
-              <Text style={styles.cardChange}>+12% hoy</Text>
+              <Text style={styles.cardValue}>{orderTodayCount ?? ordersCount ?? '...'}</Text>
+              <Text style={styles.cardChange}>
+                {orderGrowthPct !== null ? `${orderGrowthPct >= 0 ? '+' : ''}${orderGrowthPct.toFixed(1)}% vs ayer` : 'Sin datos'}
+              </Text>
             </LinearGradient>
 
             <LinearGradient
@@ -270,8 +571,12 @@ const DashboardScreen = () => {
                 <FontAwesome5 name="shopping-cart" size={24} color="#fff" />
               </View>
               <Text style={styles.cardTitle}>Ventas</Text>
-              <Text style={styles.cardValue}>{formatCurrency(2540)}</Text>
-              <Text style={styles.cardChange}>+8% esta semana</Text>
+              <Text style={styles.cardValue}>
+                {weeklySalesTotal !== null ? formatCurrency(weeklySalesTotal) : '...'}
+              </Text>
+              <Text style={styles.cardChange}>
+                {weeklyGrowthPct !== null ? `${weeklyGrowthPct >= 0 ? '+' : ''}${weeklyGrowthPct.toFixed(1)}% vs semana previa` : 'Sin datos'}
+              </Text>
             </LinearGradient>
           </View>
 
@@ -291,8 +596,12 @@ const DashboardScreen = () => {
                 <FontAwesome5 name="clock" size={18} color="#2196F3" />
                 <Text style={styles.metricTitle}>Tiempo Respuesta</Text>
               </View>
-              <Text style={styles.metricValue}>2.3h</Text>
-              <Text style={styles.metricSubtitle}>-0.5h mejora</Text>
+              <Text style={styles.metricValue}>
+                {avgResponseHours !== null ? `${avgResponseHours.toFixed(1)}h` : '...'}
+              </Text>
+              <Text style={styles.metricSubtitle}>
+                {responseDeltaHours !== null ? `${responseDeltaHours >= 0 ? '+' : ''}${responseDeltaHours.toFixed(1)}h mejora` : '...'}
+              </Text>
             </View>
           </View>
 
@@ -300,9 +609,6 @@ const DashboardScreen = () => {
           <View style={[styles.chartSection, styles.sectionElevated]}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Ventas Mensuales</Text>
-              <TouchableOpacity>
-                <Text style={styles.viewAllText}>Ver Reporte</Text>
-              </TouchableOpacity>
             </View>
             <SimpleBarChart 
               data={monthlySales} 
@@ -311,12 +617,28 @@ const DashboardScreen = () => {
             />
             <View style={styles.chartStats}>
               <View style={styles.chartStat}>
-                <Text style={styles.chartStatLabel}>Ventas Totales</Text>
-                  <Text style={styles.chartStatValue}>{formatCurrency(111000)}</Text>
+                <Text style={styles.chartStatLabel}>Ventas del mes</Text>
+                <Text style={styles.chartStatValue}>
+                  {monthlyStats.total !== null ? formatCurrency(monthlyStats.total) : '...'}
+                </Text>
               </View>
               <View style={styles.chartStat}>
-                <Text style={styles.chartStatLabel}>Crecimiento</Text>
-                <Text style={[styles.chartStatValue, styles.positiveGrowth]}>+15.2%</Text>
+                <Text style={styles.chartStatLabel}>Ticket promedio</Text>
+                <Text style={styles.chartStatValue}>
+                  {monthlyStats.avgTicket !== null ? formatCurrency(monthlyStats.avgTicket) : '...'}
+                </Text>
+              </View>
+              <View style={styles.chartStat}>
+                <Text style={styles.chartStatLabel}>Pedidos mes</Text>
+                <Text style={styles.chartStatValue}>
+                  {monthlyStats.orders !== null ? monthlyStats.orders : '...'}
+                </Text>
+              </View>
+              <View style={styles.chartStat}>
+                <Text style={styles.chartStatLabel}>Vs mes anterior</Text>
+                <Text style={[styles.chartStatValue, monthlyStats.growthPct !== null && monthlyStats.growthPct >= 0 ? styles.positiveGrowth : styles.negativeGrowth]}>
+                  {monthlyStats.growthPct !== null ? `${monthlyStats.growthPct >= 0 ? '+' : ''}${monthlyStats.growthPct.toFixed(1)}%` : '--'}
+                </Text>
               </View>
             </View>
           </View>
@@ -590,6 +912,13 @@ type Activity = {
   user: string;
 };
 
+type PendingOrder = {
+  id: string;
+  numeroPedido?: number;
+  fecha?: string;
+  estado?: string;
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -683,6 +1012,54 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  notificationOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    left: 0,
+    bottom: 0,
+    paddingTop: 10,
+    paddingRight: 60, // deja libre la campana
+    paddingLeft: 10,
+    alignItems: 'flex-end',
+    zIndex: 10,
+  },
+  notificationPanel: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    width: 260,
+    marginTop: 30,
+  },
+  notificationTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+  },
+  notificationTextDark: {
+    fontSize: 13,
+    color: '#555',
+  },
+  notificationItem: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  notificationItemTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111',
+  },
+  notificationItemSubtitle: {
+    fontSize: 12,
+    color: '#666',
   },
   userInfo: {
     alignItems: 'flex-start',
@@ -862,6 +1239,9 @@ const styles = StyleSheet.create({
   },
   positiveGrowth: {
     color: '#4CAF50',
+  },
+  negativeGrowth: {
+    color: '#EF4444',
   },
   chartSection: {
     marginBottom: 20,

@@ -11,7 +11,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { db, auth } from "../../firebaseConfig";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { formatCurrency } from '../utils/currency';
 import { getBcvUsdRate } from '../utils/getBcvRate';
 import { useGlobalConfig } from '../hooks/useGlobalConfig';
@@ -159,6 +159,7 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         empleadoAsignadoId: "abc123",
         observaciones: order.comments,
         numeroPedido: numeroPedido,
+        createdAt: serverTimestamp(),
       };
 
       await addDoc(collection(db, "Pedidos"), nuevoPedido);

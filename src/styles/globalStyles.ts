@@ -5,14 +5,14 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 // Paleta de colores (alineada con el estilo visual del Dashboard)
 const colors = {
   // Colores primarios (dashboard: indigo / morado)
-  primary: "#667eea",
-  primaryLight: "#8b93f5",
-  primaryDark: "#4f58d6",
+ primary: "#0077b6" ,
+primaryLight: "#90e0ef" ,
+primaryDark: "#023e8a" ,
   
   // Colores secundarios y acentos (complemento morado)
-  secondary: "#764ba2",
-  secondaryLight: "#8f6fcf",
-  secondaryDark: "#5a2f83",
+ secondary: "#00b4d8",
+secondaryLight: "#48cae4",
+secondaryDark: "#0096c7" ,
   
   // Colores neutros
   background: "#FFFFFF",
@@ -38,37 +38,42 @@ const colors = {
   borderDark: "#CBD5E1",
   
   // Gradientes (header / cards en Dashboard)
-  gradientPrimary: ["#667eea", "#764ba2"],
-  gradientSecondary: ["#667eea", "#764ba2"],
-  gradientSuccess: ["#4CAF50", "#45a049"],
   
-  // Shades para consistencia
+gradientPrimary: ["#023e8a", "#00b4d8"],      // Azul marino → Turquesa
+  gradientSecondary: ["#0096c7", "#48cae4"],    // Azul verdoso → Celeste suave
+  gradientSuccess: ["#2ca56c", "#39c287"],      // Verde éxito (más fresco y moderno)
+
+  
+
+  // Shades para consistencia (escala del primario #0077b6)
   primaryShades: {
-    50: '#F2F3FF',
-    100: '#E6E8FF',
-    200: '#CFCFFB',
-    300: '#B8B8F6',
-    400: '#9F9FF0',
-    500: '#667eea', // Color base (dashboard)
-    600: '#5b6fe0',
-    700: '#4f58d6',
-    800: '#3f44b7',
-    900: '#2f328f',
+    50:  "#eaf7fb",  // ultra claro (casi blanco aqua)
+    100: "#d8eef5",
+    200: "#b7e2f0",
+    300: "#90e0ef",  // azul claro (agua cristalina)
+    400: "#5fc6e4",
+    500: "#0077b6",  // color base (azul océano)
+    600: "#0067a1",
+    700: "#005788",
+    800: "#024d78",
+    900: "#023e8a",  // azul marino intenso
   },
-  
+
+  // Grises neutros con tinte frío (coherentes con la temática agua)
   grayShades: {
-    50: '#F8FAFC',
-    100: '#F1F5F9',
-    200: '#E2E8F0',
-    300: '#CBD5E1',
-    400: '#94A3B8',
-    500: '#64748B',
-    600: '#475569',
-    700: '#334155',
-    800: '#1E293B',
-    900: '#0F172A',
+    50:  "#f0fdfc",  // fondo muy claro con toque aqua
+    100: "#e6f7fd",
+    200: "#d8eef5",
+    300: "#c6e0eb",
+    400: "#a6c7d6",
+    500: "#7fa2b3",
+    600: "#5e8396",
+    700: "#45697d",
+    800: "#2b4c60",
+    900: "#163646",
   }
 };
+
 
 // Escala de tipografía moderna
 const fontSizes = {

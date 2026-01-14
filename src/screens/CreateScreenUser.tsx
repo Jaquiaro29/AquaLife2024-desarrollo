@@ -31,6 +31,9 @@ import Toast from 'react-native-toast-message';
 import { FontAwesome5, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, globalStyles } from '../styles/globalStyles';
+import { useRoute } from '@react-navigation/native';
+import { RouteProp } from '@react-navigation/native';
+import { RootStackParamList } from '../types/navigation';
 
 const { width, height } = Dimensions.get('window');
 
@@ -67,6 +70,7 @@ interface SelectedItem {
 }
 
 const CreateUserScreen = () => {
+  const route = useRoute<RouteProp<RootStackParamList, 'CreateScreenUser'>>();
   // Estados para las listas
   const [listaUsuarios, setListaUsuarios] = useState<UsuarioDoc[]>([]);
   const [listaClientes, setListaClientes] = useState<ClienteDoc[]>([]);
@@ -108,6 +112,12 @@ const CreateUserScreen = () => {
   // Animaciones
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(300));
+  // Abrir formulario por params (desde admin)
+  useEffect(() => {
+    if (route?.params?.openForm) {
+      setShowForm(true);
+    }
+  }, [route?.params?.openForm]);
 
   // Filtrar datos en tiempo real (solo por nombre y cédula)
   useEffect(() => {
