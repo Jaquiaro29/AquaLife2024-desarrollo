@@ -17,7 +17,6 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 import { formatCurrency } from '../utils/currency';
-import Toast from 'react-native-toast-message';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../styles/globalStyles';
@@ -472,47 +471,14 @@ const SalesScreen = () => {
             </View>
           </View>
 
-          {/* Resumen de totales */}
-          <View style={styles.summarySection}>
-            <Text style={styles.sectionTitle}>Resumen de Ventas</Text>
-            <View style={styles.summaryCards}>
-              <View style={[styles.summaryCard, styles.totalSalesCard]}>
-                <View style={styles.summaryIconContainer}>
-                  <Icon name="attach-money" size={24} color={colors.surface} />
-                </View>
-                <View style={styles.summaryTextContainer}>
-                  <Text style={styles.summaryLabel}>Total Ventas</Text>
-                  <Text style={styles.summaryValue}>{formatCurrency(totalAmount)}</Text>
-                </View>
-              </View>
-              
-              <View style={[styles.summaryCard, styles.botellonesCard]}>
-                <View style={styles.summaryIconContainer}>
-                  <Icon name="local-drink" size={24} color={colors.surface} />
-                </View>
-                <View style={styles.summaryTextContainer}>
-                  <Text style={styles.summaryLabel}>Total Botellones</Text>
-                  <Text style={styles.summaryValue}>{botellonesCount}</Text>
-                </View>
-              </View>
-            </View>
-            
-            <View style={styles.detailedSummary}>
-              <View style={styles.detailItem}>
-                <View style={styles.detailIcon}>
-                  <Icon name="check-circle" size={16} color={colors.secondary} />
-                </View>
-                <Text style={styles.detailLabel}>Con asa:</Text>
-                <Text style={styles.detailValue}>{conAsaCount}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <View style={styles.detailIcon}>
-                  <Icon name="radio-button-unchecked" size={16} color={colors.secondary} />
-                </View>
-                <Text style={styles.detailLabel}>Sin asa:</Text>
-                <Text style={styles.detailValue}>{sinAsaCount}</Text>
-              </View>
-            </View>
+          {/* Resumen compacto */}
+          <View style={styles.resultsSummary}>
+            <Text style={styles.resultsHeadline}>
+              {filteredPedidos.length} pedidos • {formatCurrency(totalAmount)} • {botellonesCount} botellones
+            </Text>
+            <Text style={styles.resultsDetail}>
+              Con asa: {conAsaCount} • Sin asa: {sinAsaCount}
+            </Text>
           </View>
 
           {/* Lista de pedidos filtrados */}
@@ -539,8 +505,6 @@ const SalesScreen = () => {
             )}
           </View>
         </ScrollView>
-
-        <Toast />
       </View>
     </SafeAreaView>
   );
@@ -789,11 +753,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  summarySection: {
+  resultsSummary: {
     backgroundColor: colors.surface,
     marginHorizontal: 16,
     marginTop: 16,
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -801,71 +766,15 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  summaryCards: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  summaryCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginHorizontal: 4,
-  },
-  totalSalesCard: {
-    backgroundColor: colors.secondary,
-  },
-  botellonesCard: {
-    backgroundColor: colors.secondary,
-  },
-  summaryIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  summaryTextContainer: {
-    flex: 1,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: colors.surface,
-    opacity: 0.9,
-  },
-  summaryValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.surface,
-    marginTop: 4,
-  },
-  detailedSummary: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: colors.background,
-    padding: 12,
-    borderRadius: 8,
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  detailIcon: {
-    marginRight: 6,
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginRight: 4,
-  },
-  detailValue: {
+  resultsHeadline: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  resultsDetail: {
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   pedidosSection: {
     backgroundColor: colors.surface,

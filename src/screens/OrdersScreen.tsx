@@ -158,6 +158,9 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         estado: "pendiente",
         empleadoAsignadoId: "abc123",
         observaciones: order.comments,
+        type: order.type,
+        tipo: order.type,
+        priority: order.priority,
         numeroPedido: numeroPedido,
         createdAt: serverTimestamp(),
       };

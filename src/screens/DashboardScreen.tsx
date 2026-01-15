@@ -84,6 +84,19 @@ const DashboardScreen = () => {
     avgTicket: number | null;
     growthPct: number | null;
   }>({ total: null, orders: null, avgTicket: null, growthPct: null });
+  const [financialTotals, setFinancialTotals] = useState<Record<FinancialState, number>>({
+    por_cobrar: 0,
+    cobrado: 0,
+    pagado: 0,
+    cancelado: 0,
+  });
+  const [financialCounts, setFinancialCounts] = useState<Record<FinancialState, number>>({
+    por_cobrar: 0,
+    cobrado: 0,
+    pagado: 0,
+    cancelado: 0,
+  });
+  const [netCashFlow, setNetCashFlow] = useState(0);
 
   const showNotificationAlert = (title: string, message: string) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -133,10 +146,65 @@ const DashboardScreen = () => {
     };
   }, []);
 
-  // Contador en tiempo real de todos los pedidos (para la tarjeta)
+  // Contador en tiempo real de todos los pedidos (para la tarjeta) + métricas financieras
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'Pedidos'), (snapshot) => {
       setOrdersCount(snapshot.size);
+
+      const totals: Record<FinancialState, number> = {
+        por_cobrar: 0,
+        cobrado: 0,
+        pagado: 0,
+        cancelado: 0,
+      };
+      const counts: Record<FinancialState, number> = {
+        por_cobrar: 0,
+        cobrado: 0,
+        pagado: 0,
+        cancelado: 0,
+      };
+
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data() as any;
+        const baseAmount = typeof data.total === 'number' ? data.total : 0;
+        const montoCobrado = typeof data.montoCobrado === 'number' ? data.montoCobrado : baseAmount;
+        const montoPagado = typeof data.montoPagado === 'number' ? data.montoPagado : 0;
+        const estadoFinDb = (data.estadoFinanciero ?? undefined) as FinancialState | undefined;
+        let estadoFin: FinancialState = 'por_cobrar';
+
+        if (estadoFinDb === 'por_cobrar' || estadoFinDb === 'cobrado' || estadoFinDb === 'pagado' || estadoFinDb === 'cancelado') {
+          estadoFin = estadoFinDb;
+        }
+
+        if (!estadoFinDb && data.estado === 'cancelado') {
+          estadoFin = 'cancelado';
+        }
+
+        counts[estadoFin] += 1;
+
+        switch (estadoFin) {
+          case 'por_cobrar':
+            totals.por_cobrar += baseAmount;
+            break;
+          case 'cobrado':
+            totals.cobrado += montoCobrado;
+            break;
+          case 'pagado':
+            totals.cobrado += montoCobrado;
+            totals.pagado += montoPagado || montoCobrado;
+            break;
+          case 'cancelado':
+            totals.cancelado += baseAmount;
+            break;
+          default:
+            totals.por_cobrar += baseAmount;
+            break;
+        }
+      });
+
+      setFinancialTotals(totals);
+      setFinancialCounts(counts);
+      setNetCashFlow(totals.cobrado - totals.pagado);
     });
     return () => unsub();
   }, []);
@@ -426,6 +494,11 @@ const DashboardScreen = () => {
     }
   };
 
+  const chargedOrders = financialCounts.cobrado + financialCounts.pagado;
+  const weeklyGrowthLabel = weeklyGrowthPct !== null
+    ? `${weeklyGrowthPct >= 0 ? '+' : ''}${weeklyGrowthPct.toFixed(1)}% vs semana previa`
+    : 'Sin datos';
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -570,13 +643,72 @@ const DashboardScreen = () => {
               <View style={styles.cardIconContainer}>
                 <FontAwesome5 name="shopping-cart" size={24} color="#fff" />
               </View>
-              <Text style={styles.cardTitle}>Ventas</Text>
+              <Text style={styles.cardTitle}>Ventas Semana</Text>
               <Text style={styles.cardValue}>
                 {weeklySalesTotal !== null ? formatCurrency(weeklySalesTotal) : '...'}
               </Text>
               <Text style={styles.cardChange}>
-                {weeklyGrowthPct !== null ? `${weeklyGrowthPct >= 0 ? '+' : ''}${weeklyGrowthPct.toFixed(1)}% vs semana previa` : 'Sin datos'}
+                Cobrado total: {formatCurrency(financialTotals.cobrado)} • {weeklyGrowthLabel}
               </Text>
+            </LinearGradient>
+          </View>
+
+          <Text style={styles.sectionTitle}>Flujo de Caja</Text>
+          <View style={styles.cardsContainer}>
+            <LinearGradient
+              colors={[colors.primaryDark, colors.primary]}
+              style={[styles.card, styles.cardElevated]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.cardIconContainer}>
+                <FontAwesome5 name="hand-holding-usd" size={24} color="#fff" />
+              </View>
+              <Text style={styles.cardTitle}>Por Cobrar</Text>
+              <Text style={styles.cardValue}>{formatCurrency(financialTotals.por_cobrar)}</Text>
+              <Text style={styles.cardChange}>{financialCounts.por_cobrar} pedidos</Text>
+            </LinearGradient>
+
+            <LinearGradient
+              colors={colors.gradientSuccess}
+              style={[styles.card, styles.cardElevated]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.cardIconContainer}>
+                <FontAwesome5 name="cash-register" size={24} color="#fff" />
+              </View>
+              <Text style={styles.cardTitle}>Cobrado</Text>
+              <Text style={styles.cardValue}>{formatCurrency(financialTotals.cobrado)}</Text>
+              <Text style={styles.cardChange}>{chargedOrders} pedidos</Text>
+            </LinearGradient>
+
+            <LinearGradient
+              colors={[colors.secondaryDark, colors.secondary]}
+              style={[styles.card, styles.cardElevated]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.cardIconContainer}>
+                <FontAwesome5 name="money-bill-wave" size={24} color="#fff" />
+              </View>
+              <Text style={styles.cardTitle}>Pagado</Text>
+              <Text style={styles.cardValue}>{formatCurrency(financialTotals.pagado)}</Text>
+              <Text style={styles.cardChange}>{financialCounts.pagado} egresos</Text>
+            </LinearGradient>
+
+            <LinearGradient
+              colors={['#4b5563', '#1f2937']}
+              style={[styles.card, styles.cardElevated]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.cardIconContainer}>
+                <FontAwesome5 name="ban" size={24} color="#fff" />
+              </View>
+              <Text style={styles.cardTitle}>Cancelado</Text>
+              <Text style={styles.cardValue}>{formatCurrency(financialTotals.cancelado)}</Text>
+              <Text style={styles.cardChange}>{financialCounts.cancelado} pedidos</Text>
             </LinearGradient>
           </View>
 
@@ -584,11 +716,13 @@ const DashboardScreen = () => {
           <View style={styles.metricsRow}>
             <View style={[styles.metricCard, styles.metricCardElevated]}>
               <View style={styles.metricHeader}>
-                <FontAwesome5 name="chart-line" size={18} color="#4CAF50" />
-                <Text style={styles.metricTitle}>Tasa de Conversión</Text>
+                <FontAwesome5 name="balance-scale" size={18} color={netCashFlow >= 0 ? colors.success : colors.error} />
+                <Text style={styles.metricTitle}>Flujo Neto</Text>
               </View>
-              <Text style={styles.metricValue}>24.5%</Text>
-              <Text style={styles.metricSubtitle}>+2.1% vs mes anterior</Text>
+              <Text style={styles.metricValue}>{formatCurrency(netCashFlow)}</Text>
+              <Text style={[styles.metricSubtitle, netCashFlow >= 0 ? styles.positiveGrowth : styles.negativeGrowth]}>
+                Cobrado {formatCurrency(financialTotals.cobrado)} • Pagado {formatCurrency(financialTotals.pagado)}
+              </Text>
             </View>
 
             <View style={[styles.metricCard, styles.metricCardElevated]}>
@@ -599,8 +733,17 @@ const DashboardScreen = () => {
               <Text style={styles.metricValue}>
                 {avgResponseHours !== null ? `${avgResponseHours.toFixed(1)}h` : '...'}
               </Text>
-              <Text style={styles.metricSubtitle}>
-                {responseDeltaHours !== null ? `${responseDeltaHours >= 0 ? '+' : ''}${responseDeltaHours.toFixed(1)}h mejora` : '...'}
+              <Text
+                style={[
+                  styles.metricSubtitle,
+                  responseDeltaHours !== null
+                    ? (responseDeltaHours <= 0 ? styles.positiveGrowth : styles.negativeGrowth)
+                    : null,
+                ]}
+              >
+                {responseDeltaHours !== null
+                  ? `${responseDeltaHours <= 0 ? '-' : '+'}${Math.abs(responseDeltaHours).toFixed(1)}h vs semana previa`
+                  : 'Sin datos'}
               </Text>
             </View>
           </View>
@@ -904,6 +1047,8 @@ const DashboardScreen = () => {
   );
 };
 
+type FinancialState = 'por_cobrar' | 'cobrado' | 'pagado' | 'cancelado';
+
 type Activity = {
   id: number | string;
   type: string;
@@ -1165,7 +1310,7 @@ const styles = StyleSheet.create({
   },
   metricSubtitle: {
     fontSize: 12,
-    color: '#4CAF50',
+    color: '#64748B',
   },
   sectionElevated: {
     backgroundColor: '#fff',

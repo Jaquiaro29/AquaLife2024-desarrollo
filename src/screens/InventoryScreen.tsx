@@ -60,14 +60,20 @@ const InventoryScreen = () => {
   // Estados para formularios modales
   const [showArticuloModal, setShowArticuloModal] = useState(false);
   const [showMovimientoModal, setShowMovimientoModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   
   // Formulario artículo
   const [nombre, setNombre] = useState('');
   const [categoria, setCategoria] = useState('');
+  const [useExistingCategory, setUseExistingCategory] = useState(true);
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('');
   const [cantidad, setCantidad] = useState<number>(0);
   const [unidad, setUnidad] = useState('');
+  const [unidadSeleccionada, setUnidadSeleccionada] = useState('');
+  const [useExistingUnit, setUseExistingUnit] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showSelectEditModal, setShowSelectEditModal] = useState(false);
 
   // Seleccionar un artículo para ver sus movimientos
   const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null);
@@ -81,6 +87,9 @@ const InventoryScreen = () => {
   // Estados para filtros y búsqueda
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategoria, setFilterCategoria] = useState('');
+  const [filterDeleteCategoria, setFilterDeleteCategoria] = useState('');
+  const [selectedForDeletion, setSelectedForDeletion] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   // Suscribirse a "Inventario"
   useEffect(() => {
@@ -104,10 +113,26 @@ const InventoryScreen = () => {
 
   // Obtener categorías únicas para el filtro
   const categoriasUnicas = [...new Set(articulos.map(articulo => articulo.categoria))];
+  const unidadesPredefinidas = ['unidades', 'litros', 'kg', 'metros', 'cajas', 'paquetes', 'botellas'];
+  const articulosParaEliminar = filterDeleteCategoria
+    ? articulos.filter((articulo) => articulo.categoria === filterDeleteCategoria)
+    : articulos;
+
+  const getSelectedItemsForDeletion = () =>
+    articulos.filter((articulo) => selectedForDeletion.has(articulo.id));
+  const selectedItemsForDeletion = getSelectedItemsForDeletion();
+  const hasSelectionForDeletion = selectedItemsForDeletion.length > 0;
 
   // Crear/Editar un artículo
   const handleSave = async () => {
-    if (!nombre || !categoria || !unidad) {
+    const categoriaFinal = useExistingCategory
+      ? categoriaSeleccionada || categoria
+      : categoria;
+    const unidadFinal = useExistingUnit
+      ? unidadSeleccionada || unidad
+      : unidad;
+
+    if (!nombre || !categoriaFinal || !unidadFinal) {
       showToast('error', 'Completa todos los campos obligatorios.');
       return;
     }
@@ -118,9 +143,9 @@ const InventoryScreen = () => {
         // Editar
         await updateDoc(doc(db, 'Inventario', editingId), {
           nombre,
-          categoria,
+          categoria: categoriaFinal,
           cantidad,
-          unidad,
+          unidad: unidadFinal,
         });
         showToast('success', 'Artículo actualizado correctamente.');
         setEditingId(null);
@@ -128,17 +153,19 @@ const InventoryScreen = () => {
         // Crear
         await addDoc(collection(db, 'Inventario'), {
           nombre,
-          categoria,
+          categoria: categoriaFinal,
           cantidad,
-          unidad,
+          unidad: unidadFinal,
         });
         showToast('success', 'Artículo creado exitosamente.');
       }
       // Reset form
       setNombre('');
       setCategoria('');
+      setCategoriaSeleccionada('');
       setCantidad(0);
       setUnidad('');
+      setUnidadSeleccionada('');
       setShowArticuloModal(false);
     } catch (error) {
       console.error(error);
@@ -152,9 +179,29 @@ const InventoryScreen = () => {
     setEditingId(item.id);
     setNombre(item.nombre);
     setCategoria(item.categoria);
+    setCategoriaSeleccionada(item.categoria);
+    setUseExistingCategory(true);
     setCantidad(item.cantidad);
     setUnidad(item.unidad);
+    setUnidadSeleccionada(item.unidad);
+    setUseExistingUnit(true);
     setShowArticuloModal(true);
+  };
+
+  const deleteArticuloWithMovimientos = async (id: string) => {
+    const movimientosRef = collection(db, 'Inventario', id, 'Movimientos');
+    const movSnap = await getDocs(movimientosRef);
+    const deletes = movSnap.docs.map((d) => deleteDoc(doc(db, 'Inventario', id, 'Movimientos', d.id)));
+    if (deletes.length > 0) {
+      await Promise.all(deletes);
+    }
+
+    await deleteDoc(doc(db, 'Inventario', id));
+
+    if (selectedItem?.id === id) {
+      setSelectedItem(null);
+      setMovimientos([]);
+    }
   };
 
   // Eliminar artículo (y sus movimientos) con confirmación única
@@ -169,22 +216,7 @@ const InventoryScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Eliminar subcolección "Movimientos" primero
-              const movimientosRef = collection(db, 'Inventario', id, 'Movimientos');
-              const movSnap = await getDocs(movimientosRef);
-              const deletes = movSnap.docs.map((d) => deleteDoc(doc(db, 'Inventario', id, 'Movimientos', d.id)));
-              if (deletes.length > 0) {
-                await Promise.all(deletes);
-              }
-
-              // Eliminar artículo
-              await deleteDoc(doc(db, 'Inventario', id));
-
-              // Limpiar selección si corresponde
-              if (selectedItem?.id === id) {
-                setSelectedItem(null);
-                setMovimientos([]);
-              }
+              await deleteArticuloWithMovimientos(id);
 
               showToast('success', 'Artículo eliminado correctamente.');
             } catch (err: any) {
@@ -196,6 +228,61 @@ const InventoryScreen = () => {
         },
       ]
     );
+  };
+
+  const toggleSelectForDeletion = (id: string) => {
+    setSelectedForDeletion((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAllFiltered = (items: ArticuloDoc[]) => {
+    setSelectedForDeletion((prev) => {
+      const next = new Set(prev);
+      const allSelected = items.every((a) => next.has(a.id));
+      if (allSelected) {
+        items.forEach((a) => next.delete(a.id));
+      } else {
+        items.forEach((a) => next.add(a.id));
+      }
+      return next;
+    });
+  };
+
+  const deleteSelectedItems = async (items: ArticuloDoc[]) => {
+    if (items.length === 0) {
+      showToast('error', 'Selecciona al menos un artículo.');
+      return;
+    }
+    setDeleting(true);
+    try {
+      for (const item of items) {
+        await deleteArticuloWithMovimientos(item.id);
+      }
+      showToast('success', 'Artículos eliminados correctamente.');
+      closeDeleteModal();
+    } catch (err: any) {
+      console.error(err);
+      const msg = err?.message ? `No se pudo eliminar: ${err.message}` : 'No se pudieron eliminar los artículos.';
+      showToast('error', msg);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleBulkDeleteConfirm = (items: ArticuloDoc[]) => {
+    if (items.length === 0) {
+      showToast('error', 'Selecciona al menos un artículo.');
+      return;
+    }
+
+    deleteSelectedItems(items);
   };
 
   // Seleccionar un artículo para ver subcolección "Movimientos"
@@ -321,14 +408,6 @@ const InventoryScreen = () => {
             />
             <Text style={styles.actionButtonText}>Movimiento</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.deleteButton]} 
-            onPress={() => handleDelete(item.id, item.nombre)}
-          >
-            <Ionicons name="trash" size={16} color={colors.textInverse} />
-            <Text style={styles.actionButtonText}>Eliminar</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Sección de movimientos expandida */}
@@ -407,6 +486,17 @@ const InventoryScreen = () => {
     });
   };
 
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setSelectedForDeletion(new Set());
+    setFilterDeleteCategoria('');
+  };
+
+  const handleSelectItemForEdit = (item: ArticuloDoc) => {
+    handleSelectEdit(item);
+    setShowSelectEditModal(false);
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor={colors.secondaryDark} barStyle="light-content" />
@@ -428,20 +518,44 @@ const InventoryScreen = () => {
               <Ionicons name="cube" size={28} color={colors.textInverse} />
               <Text style={styles.headerTitle}>Gestión de Inventario</Text>
             </View>
-            <TouchableOpacity 
-              style={styles.addButton} 
-              onPress={() => {
-                setEditingId(null);
-                setNombre('');
-                setCategoria('');
-                setCantidad(0);
-                setUnidad('');
-                setShowArticuloModal(true);
-              }}
-            >
-              <Ionicons name="add" size={20} color={colors.textInverse} />
-              <Text style={styles.addButtonText}>Nuevo Artículo</Text>
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                style={styles.addButton} 
+                onPress={() => {
+                  setEditingId(null);
+                  setNombre('');
+                  setCategoria('');
+                  setCategoriaSeleccionada('');
+                  setUseExistingCategory(categoriasUnicas.length > 0);
+                  setCantidad(0);
+                  setUnidad('');
+                  setUnidadSeleccionada('');
+                  setUseExistingUnit(true);
+                  setShowArticuloModal(true);
+                }}
+              >
+                <Ionicons name="add" size={20} color={colors.textInverse} />
+                <Text style={styles.addButtonText}>Nuevo Artículo</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.editTopButton}
+                onPress={() => setShowSelectEditModal(true)}
+              >
+                <Ionicons name="create" size={18} color={colors.textInverse} />
+                <Text style={styles.deleteTopButtonText}>Editar Artículo</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.deleteTopButton}
+                onPress={() => setShowDeleteModal(true)}
+              >
+                <Ionicons name="trash" size={18} color={colors.textInverse} />
+                <Text style={styles.deleteTopButtonText}>
+                  Eliminar Artículo
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </LinearGradient>
 
@@ -584,7 +698,7 @@ const InventoryScreen = () => {
               </TouchableOpacity>
             </View>
             
-            <ScrollView style={styles.modalContent}>
+            <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalBody}>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Nombre del artículo *</Text>
                 <TextInput
@@ -597,12 +711,112 @@ const InventoryScreen = () => {
               
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Categoría *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ej: Agua purificada"
-                  value={categoria}
-                  onChangeText={setCategoria}
-                />
+                {categoriasUnicas.length > 0 && (
+                  <View style={styles.categoryModeRow}>
+                    <TouchableOpacity
+                      style={[styles.categoryModeButton, useExistingCategory && styles.categoryModeButtonActive]}
+                      onPress={() => setUseExistingCategory(true)}
+                    >
+                      <Text
+                        style={[styles.categoryModeText, useExistingCategory && styles.categoryModeTextActive]}
+                      >
+                        Usar existente
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.categoryModeButton, !useExistingCategory && styles.categoryModeButtonActive]}
+                      onPress={() => setUseExistingCategory(false)}
+                    >
+                      <Text
+                        style={[styles.categoryModeText, !useExistingCategory && styles.categoryModeTextActive]}
+                      >
+                        Nueva
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {useExistingCategory && categoriasUnicas.length > 0 ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.categoryChipsRow}
+                  >
+                    {categoriasUnicas.map((cat) => (
+                      <TouchableOpacity
+                        key={`cat-chip-${cat}`}
+                        style={[styles.categoryChip, categoriaSeleccionada === cat && styles.categoryChipActive]}
+                        onPress={() => setCategoriaSeleccionada(cat)}
+                      >
+                        <Text
+                          style={[styles.categoryChipText, categoriaSeleccionada === cat && styles.categoryChipTextActive]}
+                        >
+                          {cat}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Ej: Agua purificada"
+                    value={categoria}
+                    onChangeText={setCategoria}
+                  />
+                )}
+
+                {useExistingCategory && categoriasUnicas.length === 0 && (
+                  <Text style={styles.helperText}>No hay categorías creadas aún. Escribe una nueva.</Text>
+                )}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Unidad de medida *</Text>
+                <View style={styles.categoryModeRow}>
+                  <TouchableOpacity
+                    style={[styles.categoryModeButton, useExistingUnit && styles.categoryModeButtonActive]}
+                    onPress={() => setUseExistingUnit(true)}
+                  >
+                    <Text style={[styles.categoryModeText, useExistingUnit && styles.categoryModeTextActive]}>
+                      Usar existente
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.categoryModeButton, !useExistingUnit && styles.categoryModeButtonActive]}
+                    onPress={() => setUseExistingUnit(false)}
+                  >
+                    <Text style={[styles.categoryModeText, !useExistingUnit && styles.categoryModeTextActive]}>
+                      Nueva
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {useExistingUnit ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.categoryChipsRow}
+                  >
+                    {unidadesPredefinidas.map((u) => (
+                      <TouchableOpacity
+                        key={`unidad-${u}`}
+                        style={[styles.categoryChip, unidadSeleccionada === u && styles.categoryChipActive]}
+                        onPress={() => setUnidadSeleccionada(u)}
+                      >
+                        <Text style={[styles.categoryChipText, unidadSeleccionada === u && styles.categoryChipTextActive]}>
+                          {u}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Ej: unidades, litros, etc."
+                    value={unidad}
+                    onChangeText={setUnidad}
+                  />
+                )}
               </View>
               
               <View style={styles.inputGroup}>
@@ -613,17 +827,12 @@ const InventoryScreen = () => {
                   keyboardType="numeric"
                   value={cantidad ? String(cantidad) : ''}
                   onChangeText={(text) => setCantidad(Number(text) || 0)}
+                  editable={!editingId}
+                  selectTextOnFocus={!editingId}
                 />
-              </View>
-              
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Unidad de medida *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ej: unidades, litros, etc."
-                  value={unidad}
-                  onChangeText={setUnidad}
-                />
+                {editingId && (
+                  <Text style={styles.helperText}>La cantidad se ajusta con movimientos.</Text>
+                )}
               </View>
             </ScrollView>
             
@@ -668,7 +877,7 @@ const InventoryScreen = () => {
               </TouchableOpacity>
             </View>
             
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, styles.modalBody]}>
               <View style={styles.tipoRow}>
                 <TouchableOpacity
                   style={[
@@ -754,6 +963,199 @@ const InventoryScreen = () => {
         </View>
       </Modal>
 
+      {/* Modal para eliminar artículos */}
+      <Modal
+        visible={showDeleteModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeDeleteModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Eliminar artículos</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={closeDeleteModal}
+              >
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.modalContent, styles.modalBody]}>
+              <View style={styles.deleteFiltersRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <TouchableOpacity
+                    style={[styles.categoryFilter, !filterDeleteCategoria && styles.categoryFilterActive]}
+                    onPress={() => setFilterDeleteCategoria('')}
+                  >
+                    <Text style={[styles.categoryFilterText, !filterDeleteCategoria && styles.categoryFilterTextActive]}>
+                      Todas las categorías
+                    </Text>
+                  </TouchableOpacity>
+                  {categoriasUnicas.map((cat) => (
+                    <TouchableOpacity
+                      key={`del-${cat}`}
+                      style={[styles.categoryFilter, filterDeleteCategoria === cat && styles.categoryFilterActive]}
+                      onPress={() => setFilterDeleteCategoria(filterDeleteCategoria === cat ? '' : cat)}
+                    >
+                      <Text style={[styles.categoryFilterText, filterDeleteCategoria === cat && styles.categoryFilterTextActive]}>
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                {articulosParaEliminar.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.selectAllButton}
+                    onPress={() => toggleSelectAllFiltered(articulosParaEliminar)}
+                  >
+                    <Ionicons
+                      name={articulosParaEliminar.every((a) => selectedForDeletion.has(a.id)) ? 'checkbox' : 'square-outline'}
+                      size={18}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.selectAllText}>Seleccionar todo</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {selectedForDeletion.size > 0 && (
+                <Text style={styles.selectionCounter}>
+                  {selectedForDeletion.size} seleccionado(s)
+                </Text>
+              )}
+
+              <ScrollView style={styles.deleteList} contentContainerStyle={styles.deleteListContent}>
+                {articulosParaEliminar.length === 0 ? (
+                  <View style={styles.deleteEmpty}>
+                    <Ionicons name="cube" size={40} color={colors.textSecondary} />
+                    <Text style={styles.emptyStateText}>No hay artículos en esta categoría.</Text>
+                  </View>
+                ) : (
+                  articulosParaEliminar.map((item) => {
+                    const checked = selectedForDeletion.has(item.id);
+                    return (
+                      <TouchableOpacity
+                        key={`del-item-${item.id}`}
+                        style={[styles.deleteRow, checked && styles.deleteRowSelected]}
+                        onPress={() => toggleSelectForDeletion(item.id)}
+                      >
+                        <View style={styles.deleteRowInfo}>
+                          <Text style={styles.deleteRowTitle}>{item.nombre}</Text>
+                          <Text style={styles.deleteRowSubtitle}>{item.categoria}</Text>
+                        </View>
+                        <Ionicons
+                          name={checked ? 'checkbox' : 'square-outline'}
+                          size={22}
+                          color={checked ? colors.primary : colors.textSecondary}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={[styles.cancelButton, styles.cancelButtonAlt]}
+                onPress={closeDeleteModal}
+              >
+                <Text style={styles.cancelButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              {deleting ? (
+                <ActivityIndicator size="small" color={colors.primary} style={{ flex: 2 }} />
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.saveButton,
+                    styles.deleteActionButton,
+                    !hasSelectionForDeletion && styles.deleteActionButtonDisabled,
+                  ]}
+                  disabled={!hasSelectionForDeletion}
+                  onPress={() => handleBulkDeleteConfirm(selectedItemsForDeletion)}
+                >
+                  <Text style={styles.saveButtonText}>Eliminar seleccionados</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal para seleccionar artículo a editar */}
+      <Modal
+        visible={showSelectEditModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowSelectEditModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Editar artículos</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowSelectEditModal(false)}
+              >
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.modalContent, styles.modalBody]}>
+              <View style={styles.searchContainer}>
+                <Ionicons name="search" size={20} color={colors.textSecondary} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Buscar artículo..."
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholderTextColor={colors.textSecondary}
+                />
+                {searchQuery ? (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              <ScrollView style={styles.deleteList} contentContainerStyle={styles.deleteListContent}>
+                {filteredArticulos.length === 0 ? (
+                  <View style={styles.deleteEmpty}>
+                    <Ionicons name="cube" size={40} color={colors.textSecondary} />
+                    <Text style={styles.emptyStateText}>No hay artículos para editar.</Text>
+                  </View>
+                ) : (
+                  filteredArticulos.map((item) => (
+                    <TouchableOpacity
+                      key={`edit-item-${item.id}`}
+                      style={styles.deleteRow}
+                      onPress={() => handleSelectItemForEdit(item)}
+                    >
+                      <View style={styles.deleteRowInfo}>
+                        <Text style={styles.deleteRowTitle}>{item.nombre}</Text>
+                        <Text style={styles.deleteRowSubtitle}>{item.categoria}</Text>
+                      </View>
+                      <Ionicons name="create-outline" size={20} color={colors.primary} />
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={[styles.cancelButton, styles.cancelButtonAlt]}
+                onPress={() => setShowSelectEditModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Toast />
     </View>
   );
@@ -803,6 +1205,10 @@ const styles = StyleSheet.create({
     color: colors.textInverse,
     marginLeft: 10,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -817,6 +1223,86 @@ const styles = StyleSheet.create({
     color: colors.textInverse,
     fontWeight: '600',
     marginLeft: 6,
+  },
+  deleteTopButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    marginLeft: 10,
+  },
+  editTopButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    marginLeft: 10,
+  },
+  deleteTopButtonText: {
+    color: colors.textInverse,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  deleteFiltersRow: {
+    marginBottom: 10,
+  },
+  selectAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  selectAllText: {
+    marginLeft: 6,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  selectionCounter: {
+    marginTop: 6,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  deleteList: {
+    maxHeight: 320,
+    flexGrow: 0,
+  },
+  deleteListContent: {
+    paddingBottom: 10,
+  },
+  deleteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  deleteRowSelected: {
+    backgroundColor: 'rgba(0,0,0,0.03)',
+  },
+  deleteRowInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  deleteRowTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  deleteRowSubtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  deleteEmpty: {
+    alignItems: 'center',
+    paddingVertical: 20,
   },
   statsContainer: {
     marginTop: -30,
@@ -1123,7 +1609,9 @@ const styles = StyleSheet.create({
   modalContainer: {
     backgroundColor: colors.card,
     borderRadius: 12,
-    maxHeight: '80%',
+    maxHeight: '90%',
+    width: '92%',
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1144,6 +1632,11 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     padding: 20,
+    maxHeight: '70%',
+  },
+  modalBody: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
   inputGroup: {
     marginBottom: 20,
@@ -1156,12 +1649,12 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
-    backgroundColor: colors.background,
+    backgroundColor: '#fff',
     color: colors.textPrimary,
   },
   textArea: {
@@ -1211,9 +1704,65 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 10,
   },
+  categoryModeRow: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  categoryModeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: colors.background,
+  },
+  categoryModeButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  categoryModeText: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  categoryModeTextActive: {
+    color: colors.textInverse,
+  },
+  categoryChipsRow: {
+    paddingVertical: 6,
+  },
+  categoryChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    marginRight: 8,
+  },
+  categoryChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  categoryChipText: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  categoryChipTextActive: {
+    color: colors.textInverse,
+  },
+  helperText: {
+    marginTop: 6,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
   cancelButtonText: {
     color: colors.textPrimary,
     fontWeight: '500',
+  },
+  cancelButtonAlt: {
+    backgroundColor: colors.background,
   },
   saveButton: {
     flex: 2,
@@ -1223,6 +1772,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: 8,
     marginLeft: 10,
+  },
+  deleteActionButton: {
+    backgroundColor: colors.error,
+  },
+  deleteActionButtonDisabled: {
+    backgroundColor: colors.border,
   },
   saveButtonText: {
     color: colors.textInverse,

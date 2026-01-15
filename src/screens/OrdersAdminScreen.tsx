@@ -1,6 +1,6 @@
 // OrdersAdminScreen.tsx - Versión mejorada con header scrolleable
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,8 @@ import { getNextOrderNumber } from '../components/getNextOrderNumber';
 const { width, height } = Dimensions.get('window');
 
 // ===== Interfaces / tipos =====
+type EstadoFinanciero = 'por_cobrar' | 'cobrado' | 'pagado' | 'cancelado';
+
 interface Pedido {
   id: string;
   numeroPedido?: number;
@@ -54,6 +56,11 @@ interface Pedido {
   observaciones: string;
   createdAt?: any;
   firstResponseAt?: any;
+  estadoFinanciero?: EstadoFinanciero;
+  montoCobrado?: number;
+  montoPagado?: number;
+  fechaCobrado?: any;
+  fechaPagado?: any;
 }
 
 interface Cliente {
@@ -77,6 +84,11 @@ interface AdminOrder {
 type ListItem =
   | { type: 'header'; fecha: string }
   | { type: 'pedido'; data: Pedido };
+
+type OrdersFilter =
+  | { type: 'all' }
+  | { type: 'estado'; value: Pedido['estado'] }
+  | { type: 'finanza'; value: EstadoFinanciero };
 
 // ===== Helper para mostrar alert en Web/Nativo =====
 function showMessage(title: string, message: string) {
@@ -106,6 +118,12 @@ function getEstadoPriority(estado: string): number {
   }
 }
 
+function resolvePedidoFinancialState(pedido: Pedido): EstadoFinanciero {
+  if (pedido.estadoFinanciero) return pedido.estadoFinanciero;
+  if (pedido.estado === 'cancelado') return 'cancelado';
+  return 'por_cobrar';
+}
+
 // ===== Componente principal =====
 const OrdersAdminScreen = () => {
   const navigation = useNavigation<any>();
@@ -117,8 +135,9 @@ const OrdersAdminScreen = () => {
   const [tapasCantidad, setTapasCantidad] = useState<number>(9999);
   const [sellosDocId, setSellosDocId] = useState<string>('');
   const [tapasDocId, setTapasDocId] = useState<string>('');
-  const [activeFilter, setActiveFilter] = useState<string>('todos');
+  const [activeFilter, setActiveFilter] = useState<OrdersFilter>({ type: 'all' });
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   // Crear pedido (modal)
   const [showCreateOrderModal, setShowCreateOrderModal] = useState<boolean>(false);
@@ -141,10 +160,22 @@ const OrdersAdminScreen = () => {
   useEffect(() => {
     const qPedidos = query(collection(db, 'Pedidos'), orderBy('fecha', 'desc'));
     const unsubscribe = onSnapshot(qPedidos, (snapshot) => {
-      const pedidosData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as Omit<Pedido, 'id'>),
-      }));
+      const pedidosData = snapshot.docs.map((doc) => {
+        const data = doc.data() as Omit<Pedido, 'id'>;
+        const estadoFinanciero: EstadoFinanciero = data.estadoFinanciero
+          ? data.estadoFinanciero
+          : data.estado === 'cancelado'
+            ? 'cancelado'
+            : 'por_cobrar';
+
+        return {
+          id: doc.id,
+          ...data,
+          estadoFinanciero,
+          montoCobrado: data.montoCobrado ?? data.total ?? 0,
+          montoPagado: data.montoPagado ?? 0,
+        };
+      });
 
       // Orden adicional (estado + numPedido/fecha)
       pedidosData.sort((a, b) => {
@@ -321,10 +352,15 @@ const OrdersAdminScreen = () => {
         costoUnitario: costPerBottleNew,
         total: totalPriceNew,
         estado: 'pendiente',
+        estadoFinanciero: 'por_cobrar' as EstadoFinanciero,
         empleadoAsignadoId: 'admin',
         observaciones: orderForm.comments,
+        type: orderForm.type,
+        tipo: orderForm.type,
         numeroPedido,
         createdAt: serverTimestamp(),
+        montoCobrado: 0,
+        montoPagado: 0,
       };
 
       await addDoc(collection(db, 'Pedidos'), nuevoPedido);
@@ -343,6 +379,11 @@ const OrdersAdminScreen = () => {
     try {
       const pedido = pedidos.find((p) => p.id === pedidoId);
       if (!pedido) return;
+
+      if (pedido.estado === 'cancelado') {
+        showMessage('Pedido cancelado', 'No se pueden modificar pedidos cancelados.');
+        return;
+      }
 
       const totalBotellones = pedido.cantidadConAsa + pedido.cantidadSinAsa;
 
@@ -404,6 +445,60 @@ const OrdersAdminScreen = () => {
     }
   };
 
+  const handleChangeEstadoFinanciero = async (pedidoId: string, nuevoEstado: EstadoFinanciero) => {
+    try {
+      const pedido = pedidos.find((p) => p.id === pedidoId);
+      if (!pedido) return;
+
+      if (pedido.estado === 'cancelado' && nuevoEstado !== 'cancelado') {
+        showMessage('Pedido cancelado', 'No se puede cambiar el estado financiero de un pedido cancelado.');
+        return;
+      }
+
+      const pedidoRef = doc(db, 'Pedidos', pedidoId);
+      const payload: Record<string, any> = {
+        estadoFinanciero: nuevoEstado,
+      };
+
+      const baseMonto = pedido.total || 0;
+      const montoCobrado = pedido.montoCobrado ?? baseMonto;
+
+      switch (nuevoEstado) {
+        case 'por_cobrar':
+          payload.montoCobrado = 0;
+          payload.montoPagado = 0;
+          payload.fechaCobrado = null;
+          payload.fechaPagado = null;
+          break;
+        case 'cobrado':
+          payload.montoCobrado = montoCobrado > 0 ? montoCobrado : baseMonto;
+          payload.montoPagado = pedido.montoPagado ?? 0;
+          payload.fechaCobrado = serverTimestamp();
+          if (!pedido.fechaPagado) payload.fechaPagado = null;
+          break;
+        case 'pagado':
+          payload.montoCobrado = montoCobrado > 0 ? montoCobrado : baseMonto;
+          payload.montoPagado = pedido.montoPagado && pedido.montoPagado > 0 ? pedido.montoPagado : baseMonto;
+          if (!pedido.fechaCobrado) payload.fechaCobrado = serverTimestamp();
+          payload.fechaPagado = serverTimestamp();
+          break;
+        case 'cancelado':
+          payload.montoCobrado = 0;
+          payload.montoPagado = 0;
+          payload.fechaCobrado = null;
+          payload.fechaPagado = null;
+          break;
+        default:
+          break;
+      }
+
+      await updateDoc(pedidoRef, payload);
+    } catch (error) {
+      console.error('Error al cambiar estado financiero:', error);
+      showMessage('Error', 'No se pudo actualizar el estado financiero.');
+    }
+  };
+
   // ===== Filtrado local (pedidoID o nombreCliente) =====
   const filteredPedidos = pedidos.filter((item) => {
     const clienteInfo = clientesMap[item.clienteId];
@@ -413,14 +508,20 @@ const OrdersAdminScreen = () => {
       : item.id;
     const texto = searchText.toLowerCase();
 
-    // Filtro por estado
-    const estadoMatch = activeFilter === 'todos' || item.estado === activeFilter;
+    let matchesFilter = true;
+    if (activeFilter.type === 'estado') {
+      matchesFilter = item.estado === activeFilter.value;
+    } else if (activeFilter.type === 'finanza') {
+      matchesFilter = resolvePedidoFinancialState(item) === activeFilter.value;
+    }
+
+    if (!matchesFilter) {
+      return false;
+    }
 
     return (
-      estadoMatch && (
-        numeroString.toLowerCase().includes(texto) ||
-        nombreCliente.includes(texto)
-      )
+      numeroString.toLowerCase().includes(texto) ||
+      nombreCliente.includes(texto)
     );
   });
 
@@ -441,6 +542,187 @@ const OrdersAdminScreen = () => {
     pendientes: pedidos.filter(p => p.estado === 'pendiente').length,
     listos: pedidos.filter(p => p.estado === 'listo').length,
     entregados: pedidos.filter(p => p.estado === 'entregado').length,
+    cancelados: pedidos.filter(p => p.estado === 'cancelado').length,
+  };
+
+  const financeStats = useMemo(() => {
+    const totals: Record<EstadoFinanciero, number> = {
+      por_cobrar: 0,
+      cobrado: 0,
+      pagado: 0,
+      cancelado: 0,
+    };
+    const counts: Record<EstadoFinanciero, number> = {
+      por_cobrar: 0,
+      cobrado: 0,
+      pagado: 0,
+      cancelado: 0,
+    };
+    let collectedTotal = 0;
+
+    pedidos.forEach((pedido) => {
+      const estadoFin = resolvePedidoFinancialState(pedido);
+      const base = pedido.total ?? 0;
+      const montoCobrado = pedido.montoCobrado ?? base;
+      const montoPagado = pedido.montoPagado ?? 0;
+
+      counts[estadoFin] += 1;
+
+      switch (estadoFin) {
+        case 'por_cobrar':
+          totals.por_cobrar += base;
+          break;
+        case 'cobrado':
+          totals.cobrado += montoCobrado;
+          collectedTotal += montoCobrado;
+          break;
+        case 'pagado':
+          collectedTotal += montoCobrado;
+          totals.pagado += montoPagado || montoCobrado;
+          break;
+        case 'cancelado':
+          totals.cancelado += base;
+          break;
+        default:
+          break;
+      }
+    });
+
+    const neto = collectedTotal - totals.pagado;
+    return { totals, counts, neto };
+  }, [pedidos]);
+
+  const summaryCards = useMemo<Array<{
+    key: string;
+    colors: string[];
+    value: string;
+    label: string;
+    filter?: OrdersFilter;
+  }>>(
+    () => [
+      {
+        key: 'total',
+        colors: colors.gradientSecondary,
+        value: String(stats.total),
+        label: 'Total pedidos',
+        filter: { type: 'all' },
+      },
+      {
+        key: 'pendientes',
+        colors: [colors.warning, '#D97706'],
+        value: String(stats.pendientes),
+        label: 'Pendientes',
+        filter: { type: 'estado', value: 'pendiente' },
+      },
+      {
+        key: 'listos',
+        colors: colors.gradientSuccess,
+        value: String(stats.listos),
+        label: 'Listos',
+        filter: { type: 'estado', value: 'listo' },
+      },
+      {
+        key: 'entregados',
+        colors: [colors.error, '#DC2626'],
+        value: String(stats.entregados),
+        label: 'Entregados',
+        filter: { type: 'estado', value: 'entregado' },
+      },
+      {
+        key: 'cancelados',
+        colors: ['#6B7280', '#1F2937'],
+        value: String(stats.cancelados),
+        label: 'Cancelados',
+        filter: { type: 'estado', value: 'cancelado' },
+      },
+      {
+        key: 'por_cobrar',
+        colors: ['#F59E0B', '#B45309'],
+        value: formatCurrency(financeStats.totals.por_cobrar),
+        label: `Por cobrar • ${financeStats.counts.por_cobrar}`,
+        filter: { type: 'finanza', value: 'por_cobrar' },
+      },
+      {
+        key: 'cobrados',
+        colors: colors.gradientSuccess,
+        value: formatCurrency(financeStats.totals.cobrado),
+        label: `Cobrados • ${financeStats.counts.cobrado}`,
+        filter: { type: 'finanza', value: 'cobrado' },
+      },
+      {
+        key: 'pagados',
+        colors: [colors.secondaryDark, colors.secondary],
+        value: formatCurrency(financeStats.totals.pagado),
+        label: `Pagados • ${financeStats.counts.pagado}`,
+        filter: { type: 'finanza', value: 'pagado' },
+      },
+      {
+        key: 'neto',
+        colors: ['#0f172a', '#1e293b'],
+        value: formatCurrency(financeStats.neto),
+        label: 'Flujo neto',
+      },
+    ],
+    [stats, financeStats]
+  );
+
+  const isCardSelected = (cardFilter?: OrdersFilter) => {
+    if (!cardFilter) return false;
+    switch (cardFilter.type) {
+      case 'all':
+        return activeFilter.type === 'all';
+      case 'estado':
+        return activeFilter.type === 'estado' && activeFilter.value === cardFilter.value;
+      case 'finanza':
+        return activeFilter.type === 'finanza' && activeFilter.value === cardFilter.value;
+      default:
+        return false;
+    }
+  };
+
+  const handleCardPress = (cardFilter?: OrdersFilter) => {
+    if (!cardFilter) return;
+    if (cardFilter.type === 'all' && activeFilter.type === 'all') {
+      return;
+    }
+    if (isCardSelected(cardFilter) && cardFilter.type !== 'all') {
+      setActiveFilter({ type: 'all' });
+      return;
+    }
+    setActiveFilter(cardFilter);
+  };
+
+  useEffect(() => {
+    if (selectedOrderId && !pedidos.some((p) => p.id === selectedOrderId)) {
+      setSelectedOrderId(null);
+    }
+  }, [pedidos, selectedOrderId]);
+
+  const selectedOrder = selectedOrderId
+    ? pedidos.find((pedido) => pedido.id === selectedOrderId) || null
+    : null;
+
+  const handleSelectOrder = (pedidoId: string) => {
+    setSelectedOrderId((prev) => (prev === pedidoId ? null : pedidoId));
+    setShowTooltip(null);
+  };
+
+  const canModifySelected = selectedOrder
+    ? !['listo', 'entregado', 'cancelado'].includes(selectedOrder.estado)
+    : false;
+
+  const financialLabels: Record<EstadoFinanciero, string> = {
+    por_cobrar: 'Por cobrar',
+    cobrado: 'Cobrado',
+    pagado: 'Pagado a proveedor',
+    cancelado: 'Cancelado',
+  };
+
+  const financialColors: Record<EstadoFinanciero, string> = {
+    por_cobrar: '#F59E0B',
+    cobrado: colors.success,
+    pagado: colors.secondaryDark,
+    cancelado: colors.error,
   };
 
   // Render de cada item
@@ -471,13 +753,27 @@ const OrdersAdminScreen = () => {
       const estadoColor = 
         pedido.estado === 'pendiente' ? colors.warning :
         pedido.estado === 'listo' ? colors.success :
+        pedido.estado === 'cancelado' ? colors.error :
         colors.secondary;
 
+      const estadoFinanciero = resolvePedidoFinancialState(pedido);
+      const estadoFinLabel = financialLabels[estadoFinanciero];
+      const estadoFinColor = financialColors[estadoFinanciero] || colors.textSecondary;
+      const isFinCancelado = estadoFinanciero === 'cancelado';
+      const disableToCobrado = estadoFinanciero === 'cobrado' || estadoFinanciero === 'pagado' || isFinCancelado;
+      const disableToPagado = estadoFinanciero === 'pagado' || isFinCancelado;
+
+      const isSelected = pedido.id === selectedOrderId;
+
       return (
-        <View style={styles.card}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={[styles.card, isSelected && styles.cardSelected]}
+          onPress={() => handleSelectOrder(pedido.id)}
+        >
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>{tituloPedido}</Text>
-            <View style={[styles.estadoBadge, { backgroundColor: estadoColor }]}>
+            <View style={[styles.estadoBadge, { backgroundColor: estadoColor }]}> 
               <Text style={styles.estadoBadgeText}>{pedido.estado.toUpperCase()}</Text>
             </View>
           </View>
@@ -542,8 +838,66 @@ const OrdersAdminScreen = () => {
               ) : null}
             </View>
 
+            <View style={styles.financeSummaryRow}>
+              <View style={styles.financeSummaryItem}>
+                <Text style={styles.financeSummaryLabel}>Cobrado</Text>
+                <Text style={styles.financeSummaryValue}>{formatCurrency(pedido.montoCobrado ?? 0)}</Text>
+              </View>
+              <View style={styles.financeSummaryItem}>
+                <Text style={styles.financeSummaryLabel}>Pagado</Text>
+                <Text style={styles.financeSummaryValue}>{formatCurrency(pedido.montoPagado ?? 0)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.financeStateRow}>
+              <View style={[styles.financeBadge, { borderColor: estadoFinColor }]}> 
+                <Ionicons name="wallet-outline" size={16} color={estadoFinColor} />
+                <Text style={[styles.financeBadgeText, { color: estadoFinColor }]}>{estadoFinLabel}</Text>
+              </View>
+              <View style={styles.financeActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.financeButton,
+                    estadoFinanciero === 'cobrado' && styles.financeButtonActive,
+                    disableToCobrado && styles.financeButtonDisabled,
+                  ]}
+                  disabled={disableToCobrado}
+                  onPress={() => handleChangeEstadoFinanciero(pedido.id, 'cobrado')}
+                >
+                  <Text
+                    style={[
+                      styles.financeButtonText,
+                      estadoFinanciero === 'cobrado' && styles.financeButtonTextActive,
+                      disableToCobrado && styles.financeButtonTextDisabled,
+                    ]}
+                  >
+                    Cobrado
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.financeButton,
+                    estadoFinanciero === 'pagado' && styles.financeButtonActive,
+                    disableToPagado && styles.financeButtonDisabled,
+                  ]}
+                  disabled={disableToPagado}
+                  onPress={() => handleChangeEstadoFinanciero(pedido.id, 'pagado')}
+                >
+                  <Text
+                    style={[
+                      styles.financeButtonText,
+                      estadoFinanciero === 'pagado' && styles.financeButtonTextActive,
+                      disableToPagado && styles.financeButtonTextDisabled,
+                    ]}
+                  >
+                    Pagado
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <View style={styles.buttonsContainer}>
-              {mostrarBotonListo && (
+              {mostrarBotonListo && pedido.estado !== 'cancelado' && (
                 <TouchableOpacity
                   style={[styles.button, styles.buttonListo]}
                   onPress={() => handleChangeEstado(pedido.id, 'listo')}
@@ -552,7 +906,7 @@ const OrdersAdminScreen = () => {
                   <Text style={styles.buttonText}>Marcar como Listo</Text>
                 </TouchableOpacity>
               )}
-              {mostrarBotonEntregado && (
+              {mostrarBotonEntregado && pedido.estado !== 'cancelado' && (
                 <View style={styles.entregadoButtonContainer}>
                   <TouchableOpacity
                     style={[styles.button, styles.buttonEntregado]}
@@ -591,8 +945,92 @@ const OrdersAdminScreen = () => {
               )}
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
       );
+    }
+  };
+
+  // ===== Estado y handlers para cancelar pedido =====
+  const [cancelOrderModalVisible, setCancelOrderModalVisible] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<Pedido | null>(null);
+
+  const handleCancelOrder = async () => {
+    if (!orderToCancel) return;
+    try {
+      const pedidoRef = doc(db, 'Pedidos', orderToCancel.id);
+      await updateDoc(pedidoRef, {
+        estado: 'cancelado',
+        estadoFinanciero: 'cancelado',
+        montoCobrado: 0,
+        montoPagado: 0,
+        fechaCobrado: null,
+        fechaPagado: null,
+      });
+      showMessage('Pedido cancelado', 'El pedido ha sido cancelado correctamente.');
+      setCancelOrderModalVisible(false);
+      setOrderToCancel(null);
+      setSelectedOrderId(null);
+    } catch (error) {
+      showMessage('Error', 'No se pudo cancelar el pedido.');
+    }
+  };
+
+  // ===== Estado y handlers para editar pedido =====
+  const [editOrderModalVisible, setEditOrderModalVisible] = useState(false);
+  const [orderToEdit, setOrderToEdit] = useState<Pedido | null>(null);
+  const [editOrderForm, setEditOrderForm] = useState({
+    cantidadConAsa: 0,
+    cantidadSinAsa: 0,
+    costoUnitario: 0,
+    total: 0,
+    estado: '',
+    empleadoAsignadoId: '',
+    observaciones: '',
+    priority: 'normal',
+    type: 'recarga',
+  });
+
+  useEffect(() => {
+    if (orderToEdit) {
+      setEditOrderForm({
+        cantidadConAsa: orderToEdit.cantidadConAsa,
+        cantidadSinAsa: orderToEdit.cantidadSinAsa,
+        costoUnitario: orderToEdit.costoUnitario,
+        total: orderToEdit.total,
+        estado: orderToEdit.estado,
+        empleadoAsignadoId: orderToEdit.empleadoAsignadoId,
+        observaciones: orderToEdit.observaciones,
+        priority: (orderToEdit as any).priority || 'normal',
+        type: (orderToEdit as any).type || 'recarga',
+      });
+    }
+  }, [orderToEdit]);
+
+  const handleEditOrderChange = (field: string, value: any) => {
+    setEditOrderForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveEditOrder = async () => {
+    if (!orderToEdit) return;
+    try {
+      const pedidoRef = doc(db, 'Pedidos', orderToEdit.id);
+      await updateDoc(pedidoRef, {
+        cantidadConAsa: editOrderForm.cantidadConAsa,
+        cantidadSinAsa: editOrderForm.cantidadSinAsa,
+        costoUnitario: editOrderForm.costoUnitario,
+        total: editOrderForm.total,
+        estado: editOrderForm.estado,
+        empleadoAsignadoId: editOrderForm.empleadoAsignadoId,
+        observaciones: editOrderForm.observaciones,
+        priority: editOrderForm.priority,
+        type: editOrderForm.type,
+        tipo: editOrderForm.type,
+      });
+      showMessage('Éxito', 'Pedido actualizado correctamente.');
+      setEditOrderModalVisible(false);
+      setOrderToEdit(null);
+    } catch (error) {
+      showMessage('Error', 'No se pudo actualizar el pedido.');
     }
   };
 
@@ -645,11 +1083,58 @@ const OrdersAdminScreen = () => {
 
         {/* Contenido principal */}
         <View style={styles.content}>
-          {/* Botón Crear Pedido */}
+          {/* Acciones de Pedidos */}
           <View style={styles.createOrderBar}>
             <TouchableOpacity style={styles.createOrderButton} onPress={openCreateOrderModal}>
               <Ionicons name="add-circle" size={18} color={colors.textInverse} />
               <Text style={styles.createOrderButtonText}>Crear Pedido</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.manageOrderButton,
+                (!selectedOrder || !canModifySelected) && styles.manageOrderButtonDisabled,
+              ]}
+              onPress={() => {
+                if (!selectedOrder) {
+                  showMessage('Selecciona un pedido', 'Primero selecciona un pedido de la lista.');
+                  return;
+                }
+                if (!canModifySelected) {
+                  showMessage('No editable', 'Solo se pueden editar pedidos pendientes.');
+                  return;
+                }
+                setOrderToEdit(selectedOrder);
+                setEditOrderModalVisible(true);
+              }}
+              disabled={!selectedOrder || !canModifySelected}
+            >
+              <Ionicons name="create-outline" size={18} color={colors.secondaryDark} />
+              <Text style={styles.manageOrderButtonText}>Editar Pedido</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.manageOrderButton,
+                styles.manageOrderButtonDanger,
+                (!selectedOrder || !canModifySelected) && styles.manageOrderButtonDisabled,
+              ]}
+              onPress={() => {
+                if (!selectedOrder) {
+                  showMessage('Selecciona un pedido', 'Primero selecciona un pedido de la lista.');
+                  return;
+                }
+                if (!canModifySelected) {
+                  showMessage('No se puede cancelar', 'Solo se pueden cancelar pedidos pendientes.');
+                  return;
+                }
+                setOrderToCancel(selectedOrder);
+                setCancelOrderModalVisible(true);
+              }}
+              disabled={!selectedOrder || !canModifySelected}
+            >
+              <Ionicons name="close-circle-outline" size={20} color={colors.error} />
+              <Text style={styles.manageOrderButtonText}>Cancelar Pedido</Text>
             </TouchableOpacity>
           </View>
           {/* Dashboard Stats */}
@@ -657,41 +1142,31 @@ const OrdersAdminScreen = () => {
             horizontal 
             showsHorizontalScrollIndicator={false}
             style={styles.statsContainer}
+            contentContainerStyle={styles.statsRow}
           >
-            <LinearGradient
-              colors={colors.gradientSecondary}
-              style={styles.statCard}
-            >
-              <Text style={styles.statNumber}>{stats.total}</Text>
-              <Text style={styles.statLabel}>Total Pedidos</Text>
-            </LinearGradient>
-            
-            <LinearGradient
-              colors={[colors.warning, '#D97706']}
-              style={styles.statCard}
-            >
-              <Text style={styles.statNumber}>{stats.pendientes}</Text>
-              <Text style={styles.statLabel}>Pendientes</Text>
-            </LinearGradient>
-            
-            <LinearGradient
-              colors={colors.gradientSuccess}
-              style={styles.statCard}
-            >
-              <Text style={styles.statNumber}>{stats.listos}</Text>
-              <Text style={styles.statLabel}>Listos</Text>
-            </LinearGradient>
-            
-            <LinearGradient
-              colors={[colors.error, '#DC2626']}
-              style={styles.statCard}
-            >
-              <Text style={styles.statNumber}>{stats.entregados}</Text>
-              <Text style={styles.statLabel}>Entregados</Text>
-            </LinearGradient>
+            {summaryCards.map((card) => {
+              const highlight = isCardSelected(card.filter);
+              return (
+                <TouchableOpacity
+                  key={card.key}
+                  style={styles.statCardWrapper}
+                  activeOpacity={card.filter ? 0.85 : 1}
+                  onPress={() => handleCardPress(card.filter)}
+                  disabled={!card.filter}
+                >
+                  <LinearGradient
+                    colors={card.colors}
+                    style={[styles.statCard, highlight && styles.statCardActive]}
+                  >
+                    <Text style={styles.statNumber}>{card.value}</Text>
+                    <Text style={styles.statLabel}>{card.label}</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
 
-          {/* Search and Filters */}
+          {/* Buscador */}
           <View style={styles.controlsContainer}>
             <View style={styles.searchContainer}>
               <Ionicons name="search" size={20} color={colors.textSecondary} />
@@ -703,48 +1178,6 @@ const OrdersAdminScreen = () => {
                 placeholderTextColor={colors.textSecondary}
               />
             </View>
-            
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.filtersContainer}
-            >
-              <TouchableOpacity
-                style={[styles.filterButton, activeFilter === 'todos' && styles.filterButtonActive]}
-                onPress={() => setActiveFilter('todos')}
-              >
-                <Text style={[styles.filterButtonText, activeFilter === 'todos' && styles.filterButtonTextActive]}>
-                  Todos
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.filterButton, activeFilter === 'pendiente' && styles.filterButtonActive]}
-                onPress={() => setActiveFilter('pendiente')}
-              >
-                <Text style={[styles.filterButtonText, activeFilter === 'pendiente' && styles.filterButtonTextActive]}>
-                  Pendientes
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.filterButton, activeFilter === 'listo' && styles.filterButtonActive]}
-                onPress={() => setActiveFilter('listo')}
-              >
-                <Text style={[styles.filterButtonText, activeFilter === 'listo' && styles.filterButtonTextActive]}>
-                  Listos
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.filterButton, activeFilter === 'entregado' && styles.filterButtonActive]}
-                onPress={() => setActiveFilter('entregado')}
-              >
-                <Text style={[styles.filterButtonText, activeFilter === 'entregado' && styles.filterButtonTextActive]}>
-                  Entregados
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
           </View>
 
           {/* Lista de Pedidos */}
@@ -753,7 +1186,7 @@ const OrdersAdminScreen = () => {
               <Ionicons name="document-text-outline" size={64} color={colors.textSecondary} />
               <Text style={styles.emptyStateTitle}>No se encontraron pedidos</Text>
               <Text style={styles.emptyStateSubtitle}>
-                {searchText || activeFilter !== 'todos' 
+                {searchText || activeFilter.type !== 'all' 
                   ? 'Intenta cambiar los filtros de búsqueda' 
                   : 'No hay pedidos registrados en el sistema'}
               </Text>
@@ -782,7 +1215,7 @@ const OrdersAdminScreen = () => {
       {/* Modal Crear Pedido */}
       <Modal visible={showCreateOrderModal} animationType="slide" transparent>
         <View style={styles.modalOverlayAdmin}>
-          <View style={[styles.modalContentAdmin, { maxHeight: height * 0.9 }]}>
+          <View style={[styles.modalContentAdmin, { maxHeight: height * 0.9 }]}> 
             <Text style={styles.modalTitleAdmin}>Nuevo Pedido</Text>
             <ScrollView keyboardShouldPersistTaps="handled">
               {/* Selector de Cliente */}
@@ -945,6 +1378,185 @@ const OrdersAdminScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Modal Cancelar Pedido */}
+      <Modal visible={cancelOrderModalVisible} animationType="fade" transparent>
+        <View style={styles.modalOverlayAdmin}>
+          <View style={[styles.modalContentAdmin, { maxWidth: 350, alignSelf: 'center' }]}> 
+            <Text style={styles.modalTitleAdmin}>Cancelar Pedido</Text>
+            <Text style={{ marginVertical: 16, fontSize: 16, color: colors.textPrimary, textAlign: 'center' }}>
+              ¿Estás seguro que deseas cancelar este pedido?
+            </Text>
+            <View style={styles.modalButtonsAdmin}>
+              <TouchableOpacity style={styles.modalButtonCancelAdmin} onPress={() => { setCancelOrderModalVisible(false); setOrderToCancel(null); }}>
+                <Text style={styles.modalButtonTextCancelAdmin}>No, volver</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalButtonConfirmAdmin} onPress={handleCancelOrder}>
+                <Text style={styles.modalButtonTextConfirmAdmin}>Sí, cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Editar Pedido */}
+      <Modal visible={editOrderModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlayAdmin}>
+          <View style={[styles.modalContentAdmin, { maxHeight: height * 0.9 }]}> 
+            <Text style={styles.modalTitleAdmin}>Editar Pedido</Text>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {/* Cliente (solo lectura) */}
+              <View style={styles.sectionAdmin}>
+                <Text style={styles.sectionTitleAdmin}>Cliente</Text>
+                <Text style={[styles.searchInputAdmin, { color: colors.textPrimary, backgroundColor: colors.grayShades[100] }]}>{orderToEdit ? (clientesMap[orderToEdit.clienteId]?.nombre || 'Sin nombre') : ''}</Text>
+              </View>
+
+              {/* Tipo de Servicio */}
+              <View style={styles.sectionAdmin}>
+                <Text style={styles.sectionTitleAdmin}>Tipo de Servicio</Text>
+                <View style={styles.typeButtonsAdmin}>
+                  <TouchableOpacity
+                    style={[styles.typeButtonAdmin, editOrderForm.type === 'recarga' && styles.typeButtonActiveAdmin]}
+                    onPress={() => handleEditOrderChange('type', 'recarga')}
+                  >
+                    <Text style={[styles.typeButtonTextAdmin, editOrderForm.type === 'recarga' && styles.typeButtonTextActiveAdmin]}>🔄 Recarga</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.typeButtonAdmin, editOrderForm.type === 'intercambio' && styles.typeButtonActiveAdmin]}
+                    onPress={() => handleEditOrderChange('type', 'intercambio')}
+                  >
+                    <Text style={[styles.typeButtonTextAdmin, editOrderForm.type === 'intercambio' && styles.typeButtonTextActiveAdmin]}>💧 Intercambio</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Cantidades */}
+              <View style={styles.sectionAdmin}>
+                <Text style={styles.sectionTitleAdmin}>Cantidad de Botellones</Text>
+                <View style={styles.quantityRowAdmin}>
+                  <View style={styles.quantityCardAdmin}>
+                    <Text style={styles.quantityTitleAdmin}>🫙 Con Asa</Text>
+                    <View style={styles.quantityControlsAdmin}>
+                      <TouchableOpacity style={styles.quantityButtonAdmin} onPress={() => handleEditOrderChange('cantidadConAsa', Math.max(0, editOrderForm.cantidadConAsa - 1))}>
+                        <Text style={styles.quantityButtonTextAdmin}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.quantityValueAdmin}>{editOrderForm.cantidadConAsa}</Text>
+                      <TouchableOpacity style={styles.quantityButtonAdmin} onPress={() => handleEditOrderChange('cantidadConAsa', editOrderForm.cantidadConAsa + 1)}>
+                        <Text style={styles.quantityButtonTextAdmin}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  <View style={styles.quantityCardAdmin}>
+                    <Text style={styles.quantityTitleAdmin}>💧 Sin Asa</Text>
+                    <View style={styles.quantityControlsAdmin}>
+                      <TouchableOpacity style={styles.quantityButtonAdmin} onPress={() => handleEditOrderChange('cantidadSinAsa', Math.max(0, editOrderForm.cantidadSinAsa - 1))}>
+                        <Text style={styles.quantityButtonTextAdmin}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.quantityValueAdmin}>{editOrderForm.cantidadSinAsa}</Text>
+                      <TouchableOpacity style={styles.quantityButtonAdmin} onPress={() => handleEditOrderChange('cantidadSinAsa', editOrderForm.cantidadSinAsa + 1)}>
+                        <Text style={styles.quantityButtonTextAdmin}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+                <Text style={styles.totalAdmin}>Total: {editOrderForm.cantidadConAsa + editOrderForm.cantidadSinAsa}</Text>
+              </View>
+
+              {/* Prioridad */}
+              <View style={styles.sectionAdmin}>
+                <Text style={styles.sectionTitleAdmin}>Prioridad</Text>
+                <View style={styles.priorityRowAdmin}>
+                  <TouchableOpacity
+                    style={[styles.priorityButtonAdmin, editOrderForm.priority === 'normal' && styles.priorityButtonActiveAdmin]}
+                    onPress={() => handleEditOrderChange('priority', 'normal')}
+                  >
+                    <Text style={styles.priorityTitleAdmin}>⏱️ Normal</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.priorityButtonAdmin, editOrderForm.priority === 'alta' && styles.priorityButtonActiveAdmin]}
+                    onPress={() => handleEditOrderChange('priority', 'alta')}
+                  >
+                    <Text style={styles.priorityTitleAdmin}>⚡ Alta</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Estado */}
+              <View style={styles.sectionAdmin}>
+                <Text style={styles.sectionTitleAdmin}>Estado</Text>
+                <TextInput
+                  style={styles.searchInputAdmin}
+                  value={editOrderForm.estado}
+                  onChangeText={(t) => handleEditOrderChange('estado', t)}
+                  placeholder="pendiente, listo, entregado, cancelado..."
+                />
+              </View>
+
+              {/* Empleado asignado */}
+              <View style={styles.sectionAdmin}>
+                <Text style={styles.sectionTitleAdmin}>Empleado asignado</Text>
+                <TextInput
+                  style={styles.searchInputAdmin}
+                  value={editOrderForm.empleadoAsignadoId}
+                  onChangeText={(t) => handleEditOrderChange('empleadoAsignadoId', t)}
+                  placeholder="ID empleado"
+                />
+              </View>
+
+              {/* Comentarios */}
+              <View style={styles.sectionAdmin}>
+                <Text style={styles.sectionTitleAdmin}>Comentarios</Text>
+                <TextInput
+                  style={styles.commentsInputAdmin}
+                  placeholder="¿Alguna instrucción especial?"
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={3}
+                  value={editOrderForm.observaciones}
+                  onChangeText={(t) => handleEditOrderChange('observaciones', t)}
+                />
+              </View>
+
+              {/* Resumen */}
+              <View style={styles.summaryAdmin}>
+                <Text style={styles.summaryTitleAdmin}>Resumen</Text>
+                <View style={styles.summaryRowAdmin}>
+                  <Text style={styles.summaryLabelAdmin}>Botellones:</Text>
+                  <Text style={styles.summaryValueAdmin}>{editOrderForm.cantidadConAsa + editOrderForm.cantidadSinAsa}</Text>
+                </View>
+                <View style={styles.summaryRowAdmin}>
+                  <Text style={styles.summaryLabelAdmin}>Costo unitario:</Text>
+                  <TextInput
+                    style={styles.summaryValueAdmin}
+                    value={editOrderForm.costoUnitario.toString()}
+                    onChangeText={(t) => handleEditOrderChange('costoUnitario', Number(t))}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <View style={styles.summaryRowAdmin}>
+                  <Text style={styles.summaryLabelAdmin}>Total:</Text>
+                  <TextInput
+                    style={styles.summaryTotalAdmin}
+                    value={editOrderForm.total.toString()}
+                    onChangeText={(t) => handleEditOrderChange('total', Number(t))}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              {/* Botones */}
+              <View style={styles.modalButtonsAdmin}>
+                <TouchableOpacity style={styles.modalButtonCancelAdmin} onPress={() => { setEditOrderModalVisible(false); setOrderToEdit(null); }}>
+                  <Text style={styles.modalButtonTextCancelAdmin}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalButtonConfirmAdmin} onPress={handleSaveEditOrder}>
+                  <Text style={styles.modalButtonTextConfirmAdmin}>Guardar Cambios</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1012,28 +1624,44 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   statsContainer: {
-    marginTop: -30,
-    marginBottom: 20,
+    marginTop: 0,
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  statsRow: {
+    paddingRight: 16,
+  },
+  statCardWrapper: {
+    marginRight: 10,
+    flexGrow: 0,
   },
   statCard: {
-    padding: 20,
-    borderRadius: 16,
-    marginRight: 12,
-    minWidth: 120,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    minWidth: 100,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  statCardActive: {
+    borderColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 2,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   statNumber: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: 'bold',
     color: colors.textInverse,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: 'rgba(255,255,255,0.9)',
     fontWeight: '500',
   },
@@ -1059,32 +1687,6 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     fontSize: 16,
     color: colors.textPrimary,
-  },
-  filtersContainer: {
-    marginBottom: 8,
-  },
-  filterButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: colors.background,
-    marginRight: 8,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  filterButtonActive: {
-    backgroundColor: colors.secondary,
-  },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  filterButtonTextActive: {
-    color: colors.textInverse,
   },
   listContent: {
     paddingBottom: 20,
@@ -1112,6 +1714,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 8,
     overflow: 'hidden',
+  },
+  cardSelected: {
+    borderWidth: 2,
+    borderColor: colors.secondary,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -1220,6 +1826,83 @@ const styles = StyleSheet.create({
     color: colors.warning,
     marginLeft: 6,
     flex: 1,
+  },
+  financeSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  financeSummaryItem: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  financeSummaryLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  financeSummaryValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+  },
+  financeStateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 12,
+  },
+  financeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    backgroundColor: colors.background,
+  },
+  financeBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  financeActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  financeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  financeButtonActive: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
+  },
+  financeButtonDisabled: {
+    opacity: 0.5,
+  },
+  financeButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  financeButtonTextActive: {
+    color: colors.textInverse,
+  },
+  financeButtonTextDisabled: {
+    color: colors.textSecondary,
   },
   buttonsContainer: {
     gap: 12,
@@ -1330,6 +2013,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
   },
   createOrderButton: {
     flexDirection: 'row',
@@ -1342,6 +2028,27 @@ const styles = StyleSheet.create({
   },
   createOrderButtonText: {
     color: colors.textInverse,
+    fontWeight: '600',
+  },
+  manageOrderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  manageOrderButtonDanger: {
+    borderColor: colors.error,
+  },
+  manageOrderButtonDisabled: {
+    opacity: 0.4,
+  },
+  manageOrderButtonText: {
+    color: colors.textPrimary,
     fontWeight: '600',
   },
   modalOverlayAdmin: {
