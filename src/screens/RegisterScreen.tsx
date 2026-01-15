@@ -75,33 +75,47 @@ const RegisterScreen = ({ navigation }: any) => {
 
   // ==================== Manejar el Registro ====================
   const handleRegister = async () => {
+    // Normalizar entradas para validar/guardar
+    const trimmedName = name.trim();
+    const trimmedCedula = cedula.trim();
+    const trimmedTelefono = telefono.trim();
+    const trimmedDireccion = direccion.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+
     // Validar campos vacíos
-    if (!name || !cedula || !telefono || !direccion || !email || !password) {
+    if (
+      !trimmedName ||
+      !trimmedCedula ||
+      !trimmedTelefono ||
+      !trimmedDireccion ||
+      !normalizedEmail ||
+      !password
+    ) {
       showToast('error', 'Por favor, completa todos los campos.');
       return;
     }
 
     // Validar Nombre
-    if (!nameRegex.test(name)) {
+    if (!nameRegex.test(trimmedName)) {
       showToast('error', 'El nombre solo puede contener letras y espacios.');
       return;
     }
 
     // Validar Cédula (numérico)
-    const cedulaNum = parseInt(cedula.trim(), 10);
+    const cedulaNum = parseInt(trimmedCedula, 10);
     if (isNaN(cedulaNum)) {
       showToast('error', 'La cédula debe ser un valor numérico.');
       return;
     }
 
     // Validar Teléfono (numérico)
-    if (!phoneRegex.test(telefono)) {
+    if (!phoneRegex.test(trimmedTelefono)) {
       showToast('error', 'El teléfono solo puede contener dígitos.');
       return;
     }
 
     // Validar Email
-    if (!emailRegex.test(email.trim())) {
+    if (!emailRegex.test(normalizedEmail)) {
       showToast('error', 'El formato del correo no es válido.');
       return;
     }
@@ -140,18 +154,18 @@ const RegisterScreen = ({ navigation }: any) => {
       const auth = getAuth();
       const userCredential = await createUserWithEmailAndPassword(
         auth,
-        email.trim(),
+        normalizedEmail,
         password
       );
       const user = userCredential.user;
 
       // C) Crear el doc en "Clientes" (activo: true)
       await setDoc(doc(db, 'Clientes', user.uid), {
-        nombre: name.trim(),
+        nombre: trimmedName,
         cedula: cedulaNum,
-        telefono: telefono.trim(),
-        direccion: direccion.trim(),
-        email: email.trim(),
+        telefono: trimmedTelefono,
+        direccion: trimmedDireccion,
+        email: normalizedEmail,
         tipo: 'cliente',
         activo: true,
       });
