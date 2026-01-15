@@ -11,7 +11,10 @@ import {
   Alert,
   Dimensions,
   Animated,
-  StatusBar
+  StatusBar,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import {
   collection,
@@ -28,90 +31,236 @@ import {
 } from 'firebase/auth';
 import { db } from '../../firebaseConfig';
 import Toast from 'react-native-toast-message';
-import { FontAwesome5, MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, globalStyles } from '../styles/globalStyles';
+import { colors } from '../styles/globalStyles';
 import { useRoute } from '@react-navigation/native';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types/navigation';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
-// Interfaz para documentos en la colección "usuarios"
-interface UsuarioDoc {
+const CLIENT_GRADIENT = colors.gradientPrimary;
+
+type ActiveTab = 'todos' | 'admins' | 'clientes';
+
+interface BaseUserDoc {
   id: string;
-  nombre: string;
+  nombre?: string;
+  cedula?: string;
   email?: string;
   telefono?: string;
   direccion?: string;
-  cedula?: string;
   password?: string;
   tipo?: string;
   activo?: boolean;
 }
 
-// Interfaz para documentos en la colección "clientes"
-interface ClienteDoc {
-  id: string;
-  nombre: string;
-  email?: string;
-  telefono?: string;
-  direccion?: string;
-  cedula?: string;
-  password?: string;
-  tipo?: string;
-  activo?: boolean;
-}
+type UsuarioDoc = BaseUserDoc;
+type ClienteDoc = BaseUserDoc;
 
-// Para manejar el item seleccionado y saber si es "usuario" o "cliente"
-interface SelectedItem {
+type SelectedItem = {
   id: string;
   type: 'usuario' | 'cliente';
-}
+};
+
+type CreateFormErrors = {
+  nombre?: string;
+  cedula?: string;
+  email?: string;
+  telefono?: string;
+  direccion?: string;
+  password?: string;
+};
+
+type EditFormErrors = {
+  nombre?: string;
+  email?: string;
+  telefono?: string;
+  direccion?: string;
+  newPassword?: string;
+  confirmPassword?: string;
+};
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const sanitizeName = (value: string) =>
+  value
+    .replace(/[^a-zA-ZÁÉÍÓÚÜÑáéíóúüñ\s]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trimStart();
+
+const sanitizeCedula = (value: string) =>
+  value.replace(/\D/g, '').slice(0, 12);
+
+const sanitizeEmail = (value: string) => value.replace(/\s/g, '').toLowerCase();
+
+const sanitizePhone = (value: string) =>
+  value
+    .replace(/[^0-9+]/g, '')
+    .replace(/(?!^)\+/g, '')
+    .slice(0, 15);
+
+const sanitizeAddress = (value: string) =>
+  value.replace(/\s{2,}/g, ' ').trimStart();
+
+const sanitizePassword = (value: string) => value.trim();
+
+const sanitizeSearch = (value: string) =>
+  value
+    .replace(/[^a-zA-Z0-9ÁÉÍÓÚÜÑáéíóúüñ\s]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trimStart();
 
 const CreateUserScreen = () => {
   const route = useRoute<RouteProp<RootStackParamList, 'CreateScreenUser'>>();
-  // Estados para las listas
   const [listaUsuarios, setListaUsuarios] = useState<UsuarioDoc[]>([]);
   const [listaClientes, setListaClientes] = useState<ClienteDoc[]>([]);
-
-  // Estados para búsqueda y filtros
-  const [searchQuery, setSearchQuery] = useState('');
-  // Maneja y sanitiza el texto del buscador: solo letras, números y espacios
-  const handleSearchChange = (text: string) => {
-    // Permite letras (incluye acentos latinos), números y espacios
-    const sanitized = text.replace(/[^0-9A-Za-z\u00C0-\u017F\s]/g, '');
-    setSearchQuery(sanitized);
-  };
-  const [activeTab, setActiveTab] = useState<'todos' | 'admins' | 'clientes'>('todos');
   const [filteredUsuarios, setFilteredUsuarios] = useState<UsuarioDoc[]>([]);
   const [filteredClientes, setFilteredClientes] = useState<ClienteDoc[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('todos');
+  const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null);
 
-  // Control del formulario principal (crear usuario/cliente)
-  const [showForm, setShowForm] = useState(false);
   const [nombre, setNombre] = useState('');
   const [cedula, setCedula] = useState('');
   const [email, setEmail] = useState('');
   const [telefono, setTelefono] = useState('');
   const [direccion, setDireccion] = useState('');
   const [password, setPassword] = useState('');
-  const [tipo, setTipo] = useState<'usuario' | 'cliente'>('cliente');
+  const [tipo, setTipo] = useState<'cliente' | 'usuario'>('cliente');
   const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [formErrors, setFormErrors] = useState<CreateFormErrors>({});
 
-  // Estado para item seleccionado (para mostrar botones de acción)
-  const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null);
-
-  // Estado para mostrar/hide formulario de modificación
   const [showEditForm, setShowEditForm] = useState(false);
-
-  // Estados locales para la edición
   const [editNombre, setEditNombre] = useState('');
   const [editTelefono, setEditTelefono] = useState('');
   const [editDireccion, setEditDireccion] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editActivo, setEditActivo] = useState(true);
+  const [editCedula, setEditCedula] = useState('');
+  const [editTipo, setEditTipo] = useState<'usuario' | 'cliente'>('cliente');
+  const [changePassword, setChangePassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [editErrors, setEditErrors] = useState<EditFormErrors>({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Animaciones
-  const [fadeAnim] = useState(new Animated.Value(0));
-  const [slideAnim] = useState(new Animated.Value(300));
+  const clearCreateError = (field: keyof CreateFormErrors) => {
+    setFormErrors((prev) => {
+      if (!prev[field]) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const handleNombreChange = (value: string) => {
+    setNombre(sanitizeName(value));
+    clearCreateError('nombre');
+  };
+
+  const handleCedulaChange = (value: string) => {
+    setCedula(sanitizeCedula(value));
+    clearCreateError('cedula');
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(sanitizeEmail(value));
+    clearCreateError('email');
+  };
+
+  const handleTelefonoChange = (value: string) => {
+    setTelefono(sanitizePhone(value));
+    clearCreateError('telefono');
+  };
+
+  const handleSearchChange = (value: string) => {
+    const sanitized = sanitizeSearch(value);
+    setSearchQuery(sanitized);
+  };
+
+  const handleDireccionChange = (value: string) => {
+    setDireccion(sanitizeAddress(value));
+    clearCreateError('direccion');
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(sanitizePassword(value));
+    clearCreateError('password');
+  };
+
+  const clearEditError = (field: keyof EditFormErrors) => {
+    setEditErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const handleEditNombreChange = (value: string) => {
+    setEditNombre(sanitizeName(value));
+    clearEditError('nombre');
+  };
+
+  const handleEditTelefonoChange = (value: string) => {
+    setEditTelefono(sanitizePhone(value));
+    clearEditError('telefono');
+  };
+
+  const handleEditDireccionChange = (value: string) => {
+    setEditDireccion(sanitizeAddress(value));
+    clearEditError('direccion');
+  };
+
+  const handleEditEmailChange = (value: string) => {
+    setEditEmail(sanitizeEmail(value));
+    clearEditError('email');
+  };
+
+  const handleToggleChangePassword = () => {
+    setChangePassword((prev) => {
+      const next = !prev;
+      if (!next) {
+        setNewPassword('');
+        setConfirmPassword('');
+        setEditErrors((current) => {
+          const clone = { ...current };
+          delete clone.newPassword;
+          delete clone.confirmPassword;
+          return clone;
+        });
+      }
+      return next;
+    });
+  };
+
+  const handleNewPasswordChange = (value: string) => {
+    setNewPassword(sanitizePassword(value));
+    clearEditError('newPassword');
+  };
+
+  const handleConfirmPasswordChange = (value: string) => {
+    setConfirmPassword(sanitizePassword(value));
+    clearEditError('confirmPassword');
+  };
+
+  const closeCreateModal = () => {
+    setShowForm(false);
+    setFormErrors({});
+  };
+
+  const closeEditModal = () => {
+    setShowEditForm(false);
+    setEditErrors({});
+    setChangePassword(false);
+    setNewPassword('');
+    setConfirmPassword('');
+  };
   // Abrir formulario por params (desde admin)
   useEffect(() => {
     if (route?.params?.openForm) {
@@ -157,37 +306,6 @@ const CreateUserScreen = () => {
     filterData();
   }, [searchQuery, listaUsuarios, listaClientes]);
 
-  // Efectos de animación
-  useEffect(() => {
-    if (showForm) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 300,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [showForm]);
-
   // Suscribirse a "usuarios" y "Clientes"
   useEffect(() => {
     const unsubscribeUsers = onSnapshot(collection(db, 'usuarios'), (snapshot) => {
@@ -220,30 +338,120 @@ const CreateUserScreen = () => {
     };
   }, []);
 
+  const validateCreateForm = (): boolean => {
+    const errors: CreateFormErrors = {};
+    const nombreTrim = nombre.trim();
+    const direccionTrim = direccion.trim();
+
+    if (!nombreTrim || nombreTrim.length < 3) {
+      errors.nombre = 'Ingresa un nombre con al menos 3 letras.';
+    }
+
+    if (!cedula) {
+      errors.cedula = 'La cédula es obligatoria.';
+    } else if (cedula.length < 6) {
+      errors.cedula = 'Incluye al menos 6 dígitos.';
+    }
+
+    if (!email) {
+      errors.email = 'El correo es obligatorio.';
+    } else if (!emailRegex.test(email)) {
+      errors.email = 'Formato de correo inválido.';
+    }
+
+    if (!telefono) {
+      errors.telefono = 'Indica un número de contacto.';
+    } else if (telefono.length < 7) {
+      errors.telefono = 'Incluye al menos 7 dígitos.';
+    }
+
+    if (!direccionTrim || direccionTrim.length < 5) {
+      errors.direccion = 'Detalla mejor la dirección.';
+    }
+
+    if (!password) {
+      errors.password = 'Define una contraseña.';
+    } else if (password.length < 6) {
+      errors.password = 'Debe tener mínimo 6 caracteres.';
+    }
+
+    setFormErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      showToast('error', 'Corrige los campos marcados.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const validateEditForm = (): boolean => {
+    const errors: EditFormErrors = {};
+    const nombreTrim = editNombre.trim();
+    const direccionTrim = editDireccion.trim();
+    const emailTrim = editEmail.trim().toLowerCase();
+
+    if (!nombreTrim || nombreTrim.length < 3) {
+      errors.nombre = 'Ingresa un nombre válido.';
+    }
+
+    if (!editTelefono) {
+      errors.telefono = 'Indica un número de contacto.';
+    } else if (editTelefono.length < 7) {
+      errors.telefono = 'Incluye al menos 7 dígitos.';
+    }
+
+    if (!direccionTrim || direccionTrim.length < 5) {
+      errors.direccion = 'Detalla mejor la dirección.';
+    }
+
+    if (!emailTrim) {
+      errors.email = 'El correo es obligatorio.';
+    } else if (!emailRegex.test(emailTrim)) {
+      errors.email = 'Ingresa un correo válido.';
+    }
+
+    if (changePassword) {
+      if (!newPassword) {
+        errors.newPassword = 'Define la nueva contraseña.';
+      } else if (newPassword.length < 6) {
+        errors.newPassword = 'Debe tener al menos 6 caracteres.';
+      }
+
+      if (!confirmPassword) {
+        errors.confirmPassword = 'Confirma la nueva contraseña.';
+      } else if (confirmPassword !== newPassword) {
+        errors.confirmPassword = 'Las contraseñas no coinciden.';
+      }
+    }
+
+    setEditErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      showToast('error', 'Corrige los datos antes de guardar.');
+      return false;
+    }
+
+    return true;
+  };
+
   // Crear nuevo user/cliente TANTO en Auth como en Firestore
   const handleCreate = async () => {
-    if (!nombre || !cedula || !email || !telefono || !direccion) {
-      showToast('error', 'Completa todos los campos requeridos.');
-      return;
-    }
-    if (!password) {
-      showToast('error', 'Debes especificar una contraseña para el Auth.');
+    if (!validateCreateForm()) {
       return;
     }
 
     setLoading(true);
 
     try {
-      // 1. Crear en Firebase Auth
       const auth = getAuth();
       const userCredential: UserCredential = await createUserWithEmailAndPassword(
         auth,
-        email,
+        email.trim().toLowerCase(),
         password
       );
       const user = userCredential.user;
 
-      // 2. Crear en Firestore
       let collectionName = 'Clientes';
       let valorTipo = 'cliente';
 
@@ -253,11 +461,11 @@ const CreateUserScreen = () => {
       }
 
       await setDoc(doc(db, collectionName, user.uid), {
-        nombre,
+        nombre: nombre.trim(),
         cedula,
-        email,
+        email: email.trim().toLowerCase(),
         telefono,
-        direccion,
+        direccion: direccion.trim(),
         password,
         tipo: valorTipo,
         activo: true,
@@ -265,7 +473,6 @@ const CreateUserScreen = () => {
 
       showToast('success', `Se creó un ${valorTipo} correctamente en Auth y Firestore.`);
 
-      // Limpiar campos
       setNombre('');
       setCedula('');
       setEmail('');
@@ -273,7 +480,7 @@ const CreateUserScreen = () => {
       setDireccion('');
       setPassword('');
       setTipo('cliente');
-      setShowForm(false);
+      closeCreateModal();
 
     } catch (error) {
       console.error('Error al crear registro:', error);
@@ -335,7 +542,7 @@ const CreateUserScreen = () => {
     } else {
       setSelectedItem({ id, type: 'usuario' });
     }
-    setShowEditForm(false);
+    closeEditModal();
   };
 
   const handleSelectCliente = (id: string) => {
@@ -344,13 +551,13 @@ const CreateUserScreen = () => {
     } else {
       setSelectedItem({ id, type: 'cliente' });
     }
-    setShowEditForm(false);
+    closeEditModal();
   };
 
   // ======== Acciones en la sección de botones ==========
   const handleCancelSelection = () => {
     setSelectedItem(null);
-    setShowEditForm(false);
+    closeEditModal();
   };
 
   const handleModify = async () => {
@@ -368,57 +575,122 @@ const CreateUserScreen = () => {
       return;
     }
 
-    setEditNombre(itemToEdit.nombre);
-    setEditTelefono(itemToEdit.telefono || '');
-    setEditDireccion(itemToEdit.direccion || '');
+    setEditNombre(sanitizeName(itemToEdit.nombre || ''));
+    setEditTelefono(sanitizePhone(itemToEdit.telefono || ''));
+    setEditDireccion(sanitizeAddress(itemToEdit.direccion || ''));
+    setEditEmail(sanitizeEmail(itemToEdit.email || ''));
+    setEditActivo(itemToEdit.activo !== false);
+    setEditCedula(itemToEdit.cedula || '');
+    setEditTipo(selectedItem.type === 'usuario' ? 'usuario' : 'cliente');
+    setChangePassword(false);
+    setNewPassword('');
+    setConfirmPassword('');
+    setEditErrors({});
     setShowEditForm(true);
+  };
+
+  const handleEditFromHeader = () => {
+    if (!selectedItem) {
+      showToast('error', 'Selecciona un usuario o cliente para editar.');
+      return;
+    }
+    handleModify();
+  };
+
+  const openCreateFromHeader = () => {
+    setShowForm(true);
+    setFormErrors({});
+    setSelectedItem(null);
+    setShowEditForm(false);
   };
 
   const handleSaveEdit = async () => {
     if (!selectedItem) return;
-    const colName = selectedItem.type === 'usuario' ? 'usuarios' : 'Clientes';
+    if (!validateEditForm()) {
+      return;
+    }
+    const sourceCol = selectedItem.type === 'usuario' ? 'usuarios' : 'Clientes';
+    const targetCol = editTipo === 'usuario' ? 'usuarios' : 'Clientes';
 
     try {
-      await updateDoc(doc(db, colName, selectedItem.id), {
-        nombre: editNombre,
+      const updatePayload: Record<string, any> = {
+        nombre: editNombre.trim(),
         telefono: editTelefono,
-        direccion: editDireccion,
-      });
+        direccion: editDireccion.trim(),
+        email: editEmail.trim().toLowerCase(),
+        activo: editActivo,
+      };
+
+      if (changePassword && newPassword) {
+        updatePayload.password = newPassword;
+      }
+
+      // Si cambia el tipo, mover el documento a la colección destino
+      if (sourceCol !== targetCol) {
+        const targetTipo = editTipo === 'usuario' ? 'admin' : 'cliente';
+        await setDoc(doc(db, targetCol, selectedItem.id), {
+          ...updatePayload,
+          tipo: targetTipo,
+        });
+        await deleteDoc(doc(db, sourceCol, selectedItem.id));
+      } else {
+        const targetTipo = editTipo === 'usuario' ? 'admin' : 'cliente';
+        await updateDoc(doc(db, sourceCol, selectedItem.id), {
+          ...updatePayload,
+          tipo: targetTipo,
+        });
+      }
+
       showToast('success', 'Datos modificados correctamente.');
       setSelectedItem(null);
-      setShowEditForm(false);
+      closeEditModal();
     } catch (err) {
       console.error(err);
       showToast('error', 'No se pudo modificar.');
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedItem) return;
-    
-    Alert.alert(
-      'Confirmar Eliminación',
-      `¿Estás seguro de que deseas eliminar este ${selectedItem.type === 'usuario' ? 'usuario' : 'cliente'}? Esta acción no se puede deshacer.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Eliminar', 
-          style: 'destructive',
-          onPress: async () => {
-            const colName = selectedItem.type === 'usuario' ? 'usuarios' : 'Clientes';
-            try {
-              await deleteDoc(doc(db, colName, selectedItem.id));
-              showToast('success', 'Eliminado correctamente.');
-              setSelectedItem(null);
-              setShowEditForm(false);
-            } catch (err) {
-              console.error(err);
-              showToast('error', 'No se pudo eliminar.');
-            }
-          }
-        }
-      ]
-    );
+  const handleDelete = () => {
+    if (!selectedItem) {
+      Alert.alert('Selecciona un elemento', 'Debes seleccionar un usuario o cliente antes de eliminar.');
+      showToast('error', 'Selecciona un usuario o cliente para eliminar.');
+      return;
+    }
+
+    const isUser = selectedItem.type === 'usuario';
+    const colName = isUser ? 'usuarios' : 'Clientes';
+    const selectedDoc = isUser
+      ? listaUsuarios.find((u) => u.id === selectedItem.id)
+      : listaClientes.find((c) => c.id === selectedItem.id);
+
+    if (!selectedDoc) {
+      showToast('error', 'El elemento seleccionado ya no existe.');
+      setSelectedItem(null);
+      return;
+    }
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedItem) {
+      setShowDeleteConfirm(false);
+      return;
+    }
+
+    const isUser = selectedItem.type === 'usuario';
+    const colName = isUser ? 'usuarios' : 'Clientes';
+
+    try {
+      await deleteDoc(doc(db, colName, selectedItem.id));
+      showToast('success', 'Eliminado correctamente.');
+      closeEditModal();
+      setSelectedItem(null);
+    } catch (err) {
+      console.error(err);
+      showToast('error', 'No se pudo eliminar.');
+    } finally {
+      setShowDeleteConfirm(false);
+    }
   };
 
   const handleDeactivate = async () => {
@@ -430,8 +702,8 @@ const CreateUserScreen = () => {
         activo: false,
       });
       showToast('success', 'Desactivado correctamente.');
+      closeEditModal();
       setSelectedItem(null);
-      setShowEditForm(false);
     } catch (err) {
       console.error(err);
       showToast('error', 'No se pudo desactivar.');
@@ -448,8 +720,8 @@ const CreateUserScreen = () => {
         activo: true,
       });
       showToast('success', 'Activado correctamente.');
+      closeEditModal();
       setSelectedItem(null);
-      setShowEditForm(false);
     } catch (err) {
       console.error(err);
       showToast('error', 'No se pudo activar.');
@@ -485,7 +757,7 @@ const CreateUserScreen = () => {
       >
         {/* Header de la tarjeta */}
         <LinearGradient
-          colors={isAdmin ? colors.gradientSecondary : colors.gradientSuccess}
+          colors={isAdmin ? colors.gradientSecondary : CLIENT_GRADIENT}
           style={styles.cardHeader}
         >
           <View style={styles.cardAvatar}>
@@ -512,7 +784,7 @@ const CreateUserScreen = () => {
             {item.nombre}
           </Text>
           <Text style={styles.cardEmail} numberOfLines={1}>
-            {item.email}
+            {item.email || 'Sin correo'}
           </Text>
           
           <View style={styles.cardDetails}>
@@ -574,16 +846,406 @@ const CreateUserScreen = () => {
                 <FontAwesome5 name="check-circle" size={14} color={colors.textInverse} />
               </TouchableOpacity>
             )}
-
-            <TouchableOpacity 
-              style={[styles.gridActionButton, styles.deleteButton]} 
-              onPress={handleDelete}
-            >
-              <FontAwesome5 name="trash" size={14} color={colors.textInverse} />
-            </TouchableOpacity>
           </Animated.View>
         )}
       </TouchableOpacity>
+    );
+  };
+
+  const renderCreateModal = () => {
+    if (!showForm) return null;
+
+    return (
+      <Modal
+        visible={showForm}
+        animationType="slide"
+        transparent
+        onRequestClose={closeCreateModal}
+      >
+        <View style={styles.editModalOverlay}>
+          <View style={styles.editModalContainer}>
+            <View style={styles.editModalHeader}>
+              <View style={styles.editModalHeaderLeft}>
+                <FontAwesome5 name="user-plus" size={18} color={colors.secondary} />
+                <Text style={styles.editModalTitle}>Nuevo usuario</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.editModalClose}
+                onPress={closeCreateModal}
+              >
+                <FontAwesome5 name="times" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.editModalContent}
+              contentContainerStyle={styles.editModalContentContainer}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
+              <LinearGradient
+                colors={[colors.surface, colors.background]}
+                style={styles.formGradient}
+              >
+                <Text style={styles.formTitle}>
+                  {tipo === 'cliente' ? '👤 Registrar Cliente' : '👑 Registrar Administrador'}
+                </Text>
+
+                <View style={styles.formGrid}>
+                  <View style={styles.inputWrapper}>
+                    <View style={styles.inputGroup}>
+                      <FontAwesome5 name="user" size={16} color={colors.secondary} style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Nombre completo"
+                        value={nombre}
+                        onChangeText={handleNombreChange}
+                      />
+                    </View>
+                    {formErrors.nombre && <Text style={styles.errorText}>{formErrors.nombre}</Text>}
+                  </View>
+
+                  <View style={styles.inputWrapper}>
+                    <View style={styles.inputGroup}>
+                      <FontAwesome5 name="id-card" size={16} color={colors.secondary} style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Cédula"
+                        value={cedula}
+                        onChangeText={handleCedulaChange}
+                      />
+                    </View>
+                    {formErrors.cedula && <Text style={styles.errorText}>{formErrors.cedula}</Text>}
+                  </View>
+
+                  <View style={styles.inputWrapper}>
+                    <View style={styles.inputGroup}>
+                      <FontAwesome5 name="envelope" size={16} color={colors.secondary} style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Correo electrónico"
+                        value={email}
+                        onChangeText={handleEmailChange}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                      />
+                    </View>
+                    {formErrors.email && <Text style={styles.errorText}>{formErrors.email}</Text>}
+                  </View>
+
+                  <View style={styles.inputWrapper}>
+                    <View style={styles.inputGroup}>
+                      <FontAwesome5 name="phone" size={16} color={colors.secondary} style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Teléfono"
+                        value={telefono}
+                        onChangeText={handleTelefonoChange}
+                        keyboardType="phone-pad"
+                      />
+                    </View>
+                    {formErrors.telefono && <Text style={styles.errorText}>{formErrors.telefono}</Text>}
+                  </View>
+
+                  <View style={[styles.inputWrapper, styles.inputWrapperFull]}>
+                    <Text style={styles.inputLabelInline}>Dirección</Text>
+                    <View style={styles.inputGroup}>
+                      <FontAwesome5 name="map-marker-alt" size={16} color={colors.secondary} style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Dirección completa"
+                        value={direccion}
+                        onChangeText={handleDireccionChange}
+                      />
+                    </View>
+                    {formErrors.direccion && <Text style={styles.errorText}>{formErrors.direccion}</Text>}
+                  </View>
+
+                  <View style={[styles.inputWrapper, styles.inputWrapperFull]}>
+                    <View style={styles.inputGroup}>
+                      <FontAwesome5 name="lock" size={16} color={colors.secondary} style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Contraseña"
+                        value={password}
+                        onChangeText={handlePasswordChange}
+                        secureTextEntry
+                      />
+                    </View>
+                    {formErrors.password && <Text style={styles.errorText}>{formErrors.password}</Text>}
+                  </View>
+                </View>
+
+                <View style={styles.tipoContainer}>
+                  <Text style={styles.tipoLabel}>Tipo de Cuenta:</Text>
+                  <View style={styles.tipoButtons}>
+                    <TouchableOpacity
+                      style={[
+                        styles.tipoButton,
+                        tipo === 'usuario' && styles.tipoButtonSelected,
+                      ]}
+                      onPress={() => setTipo('usuario')}
+                    >
+                      <FontAwesome5
+                        name="user-cog"
+                        size={16}
+                        color={tipo === 'usuario' ? colors.textInverse : colors.secondary}
+                      />
+                      <Text
+                        style={[
+                          styles.tipoButtonText,
+                          tipo === 'usuario' && styles.tipoButtonTextSelected,
+                        ]}
+                      >
+                        Administrador
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.tipoButton,
+                        tipo === 'cliente' && styles.tipoButtonSelected,
+                      ]}
+                      onPress={() => setTipo('cliente')}
+                    >
+                      <FontAwesome5
+                        name="user"
+                        size={16}
+                        color={tipo === 'cliente' ? colors.textInverse : colors.secondary}
+                      />
+                      <Text
+                        style={[
+                          styles.tipoButtonText,
+                          tipo === 'cliente' && styles.tipoButtonTextSelected,
+                        ]}
+                      >
+                        Cliente
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {loading ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={colors.secondary} />
+                    <Text style={styles.loadingText}>Creando usuario...</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.createButton}
+                    onPress={handleCreate}
+                    disabled={loading}
+                  >
+                    <LinearGradient
+                      colors={colors.gradientSecondary}
+                      style={styles.createButtonGradient}
+                    >
+                      <FontAwesome5 name="save" size={18} color={colors.textInverse} />
+                      <Text style={styles.createButtonText}>Crear Usuario</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+              </LinearGradient>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  const renderEditModal = () => {
+    if (!showEditForm) return null;
+
+    return (
+      <Modal
+        visible={showEditForm}
+        animationType="slide"
+        transparent
+        onRequestClose={closeEditModal}
+      >
+        <View style={styles.editModalOverlay}>
+          <View style={styles.editModalContainer}>
+            <View style={styles.editModalHeader}>
+              <View style={styles.editModalHeaderLeft}>
+                <FontAwesome5 name="user-edit" size={18} color={colors.secondary} />
+                <Text style={styles.editModalTitle}>Editar información</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.editModalClose}
+                onPress={closeEditModal}
+              >
+                <FontAwesome5 name="times" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.editModalContent}
+              contentContainerStyle={styles.editModalContentContainer}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.editSummary}>
+                <Text style={styles.editSummaryLabel}>Cédula</Text>
+                <Text style={styles.editSummaryValue}>{editCedula || 'N/A'}</Text>
+                <Text style={[styles.editSummaryLabel, { marginTop: 10 }]}>Estado actual</Text>
+                <Text style={styles.editSummaryValue}>{editActivo ? 'Activo' : 'Inactivo'}</Text>
+              </View>
+
+              <View style={styles.editInputWrapper}>
+                <View style={styles.inputGroup}>
+                  <FontAwesome5 name="user" size={16} color={colors.secondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Nombre completo"
+                    value={editNombre}
+                    onChangeText={handleEditNombreChange}
+                  />
+                </View>
+                {editErrors.nombre && <Text style={styles.errorText}>{editErrors.nombre}</Text>}
+              </View>
+
+              <View style={styles.editInputWrapper}>
+                <View style={styles.inputGroup}>
+                  <FontAwesome5 name="envelope" size={16} color={colors.secondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Correo electrónico"
+                    value={editEmail}
+                    onChangeText={handleEditEmailChange}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+                {editErrors.email && <Text style={styles.errorText}>{editErrors.email}</Text>}
+              </View>
+
+              <View style={styles.editInputWrapper}>
+                <View style={styles.inputGroup}>
+                  <FontAwesome5 name="phone" size={16} color={colors.secondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Teléfono"
+                    value={editTelefono}
+                    onChangeText={handleEditTelefonoChange}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                {editErrors.telefono && <Text style={styles.errorText}>{editErrors.telefono}</Text>}
+              </View>
+
+              <View style={styles.editInputWrapper}>
+                <View style={styles.inputGroup}>
+                  <FontAwesome5 name="map-marker-alt" size={16} color={colors.secondary} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Dirección"
+                    value={editDireccion}
+                    onChangeText={handleEditDireccionChange}
+                  />
+                </View>
+                {editErrors.direccion && <Text style={styles.errorText}>{editErrors.direccion}</Text>}
+              </View>
+
+              <View style={styles.editTipoContainer}>
+                <Text style={styles.editTipoLabel}>Tipo de cuenta</Text>
+                <View style={styles.tipoButtons}>
+                  <TouchableOpacity
+                    style={[styles.tipoButton, editTipo === 'usuario' && styles.tipoButtonSelected]}
+                    onPress={() => setEditTipo('usuario')}
+                  >
+                    <FontAwesome5
+                      name="user-cog"
+                      size={16}
+                      color={editTipo === 'usuario' ? colors.textInverse : colors.secondary}
+                    />
+                    <Text style={[styles.tipoButtonText, editTipo === 'usuario' && styles.tipoButtonTextSelected]}>
+                      Administrador
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.tipoButton, editTipo === 'cliente' && styles.tipoButtonSelected]}
+                    onPress={() => setEditTipo('cliente')}
+                  >
+                    <FontAwesome5
+                      name="user"
+                      size={16}
+                      color={editTipo === 'cliente' ? colors.textInverse : colors.secondary}
+                    />
+                    <Text style={[styles.tipoButtonText, editTipo === 'cliente' && styles.tipoButtonTextSelected]}>
+                      Cliente
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.passwordToggle, changePassword && styles.passwordToggleActive]}
+                onPress={handleToggleChangePassword}
+              >
+                <FontAwesome5 name="lock" size={16} color={changePassword ? colors.textInverse : colors.secondary} />
+                <Text
+                  style={[styles.passwordToggleText, changePassword && styles.passwordToggleTextActive]}
+                >
+                  {changePassword ? 'Cancelar cambio de contraseña' : 'Cambiar contraseña'}
+                </Text>
+                <FontAwesome5
+                  name={changePassword ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color={changePassword ? colors.textInverse : colors.secondary}
+                />
+              </TouchableOpacity>
+
+              {changePassword && (
+                <>
+                  <View style={styles.editInputWrapper}>
+                    <View style={styles.inputGroup}>
+                      <FontAwesome5 name="key" size={16} color={colors.secondary} style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Nueva contraseña"
+                        value={newPassword}
+                        onChangeText={handleNewPasswordChange}
+                        secureTextEntry
+                      />
+                    </View>
+                    {editErrors.newPassword && <Text style={styles.errorText}>{editErrors.newPassword}</Text>}
+                  </View>
+
+                  <View style={styles.editInputWrapper}>
+                    <View style={styles.inputGroup}>
+                      <FontAwesome5 name="check" size={16} color={colors.secondary} style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Confirmar contraseña"
+                        value={confirmPassword}
+                        onChangeText={handleConfirmPasswordChange}
+                        secureTextEntry
+                      />
+                    </View>
+                    {editErrors.confirmPassword && <Text style={styles.errorText}>{editErrors.confirmPassword}</Text>}
+                  </View>
+                </>
+              )}
+            </ScrollView>
+
+            <View style={styles.editModalActions}>
+              <TouchableOpacity
+                style={[styles.editModalButton, styles.editModalButtonSecondary]}
+                onPress={closeEditModal}
+              >
+                <Text style={styles.editModalButtonSecondaryText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.editModalButton, styles.editModalButtonPrimary]}
+                onPress={handleSaveEdit}
+              >
+                <Text style={styles.editModalButtonPrimaryText}>Guardar cambios</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     );
   };
 
@@ -637,72 +1299,7 @@ const CreateUserScreen = () => {
     );
   };
 
-  // Formulario de edición
-  const renderEditForm = () => {
-    if (!showEditForm) return null;
-    
-    return (
-      <Animated.View style={[styles.editFormContainer, { transform: [{ translateY: slideAnim }] }]}>
-        <LinearGradient
-          colors={colors.gradientSecondary}
-          style={styles.editFormHeader}
-        >
-          <Text style={styles.editFormTitle}>✏️ Editar Información</Text>
-          <TouchableOpacity onPress={() => setShowEditForm(false)}>
-            <FontAwesome5 name="times" size={20} color={colors.textInverse} />
-          </TouchableOpacity>
-        </LinearGradient>
-        
-        <View style={styles.editFormContent}>
-          <View style={styles.inputGroup}>
-            <FontAwesome5 name="user" size={16} color={colors.secondary} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Nombre completo"
-              value={editNombre}
-              onChangeText={setEditNombre}
-            />
-          </View>
-          
-          <View style={styles.inputGroup}>
-            <FontAwesome5 name="phone" size={16} color={colors.secondary} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Teléfono"
-              value={editTelefono}
-              onChangeText={setEditTelefono}
-              keyboardType="phone-pad"
-            />
-          </View>
-          
-          <View style={styles.inputGroup}>
-            <FontAwesome5 name="map-marker-alt" size={16} color={colors.secondary} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Dirección"
-              value={editDireccion}
-              onChangeText={setEditDireccion}
-            />
-          </View>
-          
-          <View style={styles.editFormActions}>
-            <TouchableOpacity 
-              style={[styles.editButton, styles.cancelEditButton]} 
-              onPress={() => setShowEditForm(false)}
-            >
-              <Text style={styles.cancelEditButtonText}>Cancelar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.editButton, styles.saveEditButton]} 
-              onPress={handleSaveEdit}
-            >
-              <Text style={styles.saveEditButtonText}>Guardar Cambios</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Animated.View>
-    );
-  };
+  // Edit modal se define más abajo
 
   return (
     <View style={styles.container}>
@@ -725,18 +1322,38 @@ const CreateUserScreen = () => {
               <FontAwesome5 name="users-cog" size={24} color={colors.textInverse} />
               <Text style={styles.headerTitle}>Gestión de Usuarios</Text>
             </View>
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{listaUsuarios.length}</Text>
-                <Text style={styles.statLabel}>Admins</Text>
+
+            <View style={styles.headerRight}>
+              <View style={styles.headerActions}>
+                <TouchableOpacity style={styles.headerAddButton} onPress={openCreateFromHeader}>
+                  <FontAwesome5 name="user-plus" size={16} color={colors.textInverse} />
+                  <Text style={styles.headerActionText}>Nuevo Usuario</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.headerEditButton} onPress={handleEditFromHeader}>
+                  <FontAwesome5 name="edit" size={14} color={colors.textInverse} />
+                  <Text style={styles.headerActionText}>Editar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.headerDeleteButton} onPress={() => handleDelete()}>
+                  <FontAwesome5 name="trash" size={14} color={colors.textInverse} />
+                  <Text style={styles.headerActionText}>Eliminar</Text>
+                </TouchableOpacity>
               </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{listaClientes.length}</Text>
-                <Text style={styles.statLabel}>Clientes</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{listaUsuarios.length + listaClientes.length}</Text>
-                <Text style={styles.statLabel}>Total</Text>
+
+              <View style={styles.statsContainer}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{listaUsuarios.length}</Text>
+                  <Text style={styles.statLabel}>Admins</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{listaClientes.length}</Text>
+                  <Text style={styles.statLabel}>Clientes</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{listaUsuarios.length + listaClientes.length}</Text>
+                  <Text style={styles.statLabel}>Total</Text>
+                </View>
               </View>
             </View>
           </View>
@@ -807,185 +1424,11 @@ const CreateUserScreen = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Botón principal de creación */}
-          <TouchableOpacity
-            style={styles.mainActionButton}
-            onPress={() => {
-              setShowForm(!showForm);
-              setSelectedItem(null);
-              setShowEditForm(false);
-            }}
-          >
-            <LinearGradient
-              colors={colors.gradientSuccess}
-              style={styles.mainActionGradient}
-            >
-              <FontAwesome5 name={showForm ? "times" : "user-plus"} size={20} color={colors.textInverse} />
-              <Text style={styles.mainActionText}>
-                {showForm ? 'Cancelar' : 'Nuevo Usuario'}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* Formulario de creación */}
-          <Animated.View 
-            style={[
-              styles.formContainer,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }]
-              }
-            ]}
-          >
-            {showForm && (
-              <LinearGradient
-                colors={[colors.surface, colors.background]}
-                style={styles.formGradient}
-              >
-                <Text style={styles.formTitle}>
-                  {tipo === 'cliente' ? '👤 Registrar Cliente' : '👑 Registrar Administrador'}
-                </Text>
-
-                <View style={styles.formGrid}>
-                  <View style={styles.inputGroup}>
-                    <FontAwesome5 name="user" size={16} color={colors.secondary} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Nombre completo"
-                      value={nombre}
-                      onChangeText={setNombre}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <FontAwesome5 name="id-card" size={16} color={colors.secondary} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Cédula"
-                      value={cedula}
-                      onChangeText={setCedula}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <FontAwesome5 name="envelope" size={16} color={colors.secondary} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Correo electrónico"
-                      value={email}
-                      onChangeText={setEmail}
-                      keyboardType="email-address"
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <FontAwesome5 name="phone" size={16} color={colors.secondary} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Teléfono"
-                      value={telefono}
-                      onChangeText={setTelefono}
-                      keyboardType="phone-pad"
-                    />
-                  </View>
-
-                  <View style={[styles.inputGroup, styles.fullWidth]}>
-                    <FontAwesome5 name="map-marker-alt" size={16} color={colors.secondary} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Dirección completa"
-                      value={direccion}
-                      onChangeText={setDireccion}
-                    />
-                  </View>
-
-                  <View style={[styles.inputGroup, styles.fullWidth]}>
-                    <FontAwesome5 name="lock" size={16} color={colors.secondary} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Contraseña"
-                      value={password}
-                      onChangeText={setPassword}
-                      secureTextEntry
-                    />
-                  </View>
-                </View>
-
-                {/* Selector de tipo */}
-                <View style={styles.tipoContainer}>
-                  <Text style={styles.tipoLabel}>Tipo de Cuenta:</Text>
-                  <View style={styles.tipoButtons}>
-                    <TouchableOpacity
-                      style={[
-                        styles.tipoButton,
-                        tipo === 'usuario' && styles.tipoButtonSelected,
-                      ]}
-                      onPress={() => setTipo('usuario')}
-                    >
-                      <FontAwesome5 
-                        name="user-cog" 
-                        size={16} 
-                        color={tipo === 'usuario' ? colors.textInverse : colors.secondary} 
-                      />
-                      <Text
-                        style={[
-                          styles.tipoButtonText,
-                          tipo === 'usuario' && styles.tipoButtonTextSelected,
-                        ]}
-                      >
-                        Administrador
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.tipoButton,
-                        tipo === 'cliente' && styles.tipoButtonSelected,
-                      ]}
-                      onPress={() => setTipo('cliente')}
-                    >
-                      <FontAwesome5 
-                        name="user" 
-                        size={16} 
-                        color={tipo === 'cliente' ? colors.textInverse : colors.secondary} 
-                      />
-                      <Text
-                        style={[
-                          styles.tipoButtonText,
-                          tipo === 'cliente' && styles.tipoButtonTextSelected,
-                        ]}
-                      >
-                        Cliente
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {loading ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={colors.secondary} />
-                    <Text style={styles.loadingText}>Creando usuario...</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity 
-                    style={styles.createButton} 
-                    onPress={handleCreate}
-                  >
-                    <LinearGradient
-                      colors={colors.gradientSecondary}
-                      style={styles.createButtonGradient}
-                    >
-                      <FontAwesome5 name="save" size={18} color={colors.textInverse} />
-                      <Text style={styles.createButtonText}>Crear Usuario</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                )}
-              </LinearGradient>
-            )}
-          </Animated.View>
+          {/* Formulario de creación se gestiona mediante modal */}
 
           {/* Formulario de edición */}
-          {renderEditForm()}
+          {renderCreateModal()}
+          {renderEditModal()}
 
           {/* Grid de usuarios */}
           {renderUserGrid()}
@@ -1001,7 +1444,7 @@ const CreateUserScreen = () => {
         onPress={handleReport}
       >
         <LinearGradient
-          colors={[colors.warning, colors.warning]}
+          colors={colors.gradientPrimary}
           style={styles.fabGradient}
         >
           <FontAwesome5 name="file-alt" size={20} color={colors.textInverse} />
@@ -1009,6 +1452,38 @@ const CreateUserScreen = () => {
       </TouchableOpacity>
 
       <Toast />
+
+      <Modal
+        visible={showDeleteConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteConfirm(false)}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Confirmar eliminación</Text>
+            <Text style={styles.confirmMessage}>
+              Esta acción eliminará definitivamente al usuario/cliente seleccionado.
+            </Text>
+
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.confirmCancel]}
+                onPress={() => setShowDeleteConfirm(false)}
+              >
+                <Text style={styles.confirmCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.confirmDelete]}
+                onPress={handleConfirmDelete}
+              >
+                <Text style={styles.confirmDeleteText}>Eliminar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1046,7 +1521,12 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+    flex: 1,
+    marginLeft: 12,
   },
   headerTitleContainer: {
     flexDirection: 'row',
@@ -1060,6 +1540,8 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
   },
   statItem: {
     alignItems: 'center',
@@ -1077,6 +1559,13 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     marginBottom: 15,
+  },
+  inputLabelInline: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 6,
+    marginLeft: 4,
   },
   searchInputContainer: {
     flexDirection: 'row',
@@ -1133,28 +1622,102 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: colors.textInverse,
   },
-  mainActionButton: {
-    marginBottom: 20,
-    borderRadius: 15,
-    overflow: 'hidden',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  mainActionGradient: {
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
   },
-  mainActionText: {
-    color: colors.textInverse,
-    fontSize: 16,
-    fontWeight: 'bold',
+  headerAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  headerEditButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
     marginLeft: 10,
+  },
+  headerDeleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    marginLeft: 10,
+  },
+  headerActionText: {
+    color: colors.textInverse,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    padding: 20,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  confirmTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 8,
+  },
+  confirmMessage: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 16,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  confirmButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginLeft: 10,
+  },
+  confirmCancel: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  confirmCancelText: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  confirmDelete: {
+    backgroundColor: colors.error,
+  },
+  confirmDeleteText: {
+    color: colors.textInverse,
+    fontWeight: '700',
   },
   formContainer: {
     marginBottom: 20,
@@ -1180,9 +1743,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  inputGroup: {
-    width: (width - 80) / 2,
+  inputWrapper: {
+    width: '48%',
     marginBottom: 15,
+  },
+  inputWrapperFull: {
+    width: '100%',
+    marginBottom: 15,
+  },
+  inputGroup: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
@@ -1190,9 +1760,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  fullWidth: {
-    width: '100%',
   },
   inputIcon: {
     marginRight: 10,
@@ -1203,10 +1770,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textPrimary,
   },
+  errorText: {
+    color: colors.error,
+    fontSize: 12,
+    marginTop: 6,
+    marginLeft: 4,
+  },
   tipoContainer: {
     marginVertical: 15,
   },
   tipoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 10,
+  },
+  editTipoContainer: {
+    marginVertical: 12,
+  },
+  editTipoLabel: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.textPrimary,
@@ -1267,6 +1849,142 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
   },
+  editModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  editModalContainer: {
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '90%',
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    overflow: 'hidden',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  editModalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+    marginLeft: 10,
+  },
+  editModalClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+  },
+  editModalContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  editModalContentContainer: {
+    paddingBottom: 24,
+  },
+  editSummary: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  editSummaryLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  editSummaryValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  editInputWrapper: {
+    marginBottom: 16,
+  },
+  passwordToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 16,
+  },
+  passwordToggleActive: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
+  },
+  passwordToggleText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.secondary,
+    marginLeft: 12,
+  },
+  passwordToggleTextActive: {
+    color: colors.textInverse,
+  },
+  editModalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  editModalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginHorizontal: 6,
+  },
+  editModalButtonSecondary: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  editModalButtonSecondaryText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  editModalButtonPrimary: {
+    backgroundColor: colors.secondary,
+  },
+  editModalButtonPrimaryText: {
+    color: colors.textInverse,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   // Grid Styles
   gridContainer: {
     paddingBottom: 20,
@@ -1320,7 +2038,7 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   statusActive: {
-    backgroundColor: colors.success,
+    backgroundColor: colors.primary,
   },
   statusInactive: {
     backgroundColor: colors.error,
@@ -1393,10 +2111,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
   },
   deactivateButton: {
-    backgroundColor: colors.warning,
+    backgroundColor: colors.primaryDark,
   },
   activateButton: {
-    backgroundColor: colors.success,
+    backgroundColor: colors.primary,
   },
   deleteButton: {
     backgroundColor: colors.error,

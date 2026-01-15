@@ -80,6 +80,9 @@ interface AdminOrder {
   priority: 'alta' | 'normal';
 }
 
+type AdminOrderFormErrors = Partial<Record<'cliente' | 'cantidades' | 'inventario' | 'comentarios', string>>;
+type EditOrderFormErrors = Partial<Record<'cantidades' | 'estado' | 'numericos' | 'comentarios', string>>;
+
 // Para items en la FlatList
 type ListItem =
   | { type: 'header'; fecha: string }
@@ -152,6 +155,7 @@ const OrdersAdminScreen = () => {
   const [clienteSearch, setClienteSearch] = useState<string>('');
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null);
   const [selectedClienteName, setSelectedClienteName] = useState<string>('');
+  const [orderFormErrors, setOrderFormErrors] = useState<AdminOrderFormErrors>({});
 
   // Precios globales
   const { botellonPrice, botellonPriceHigh } = useGlobalConfig();
@@ -273,6 +277,12 @@ const OrdersAdminScreen = () => {
   // Limpiar símbolos en inputs de búsqueda (solo letras/acentos, números y espacios)
   const sanitizeSearch = (text: string) => text.replace(/[^0-9A-Za-z\u00C0-\u017F\s]/g, '');
 
+  const sanitizeCommentText = (text: string) =>
+    text
+      .replace(/[^A-Za-zÀ-ÖØ-öø-ÿ\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trimStart();
+
   // ===== Helpers Crear Pedido =====
   const clientesList = Object.entries(clientesMap).map(([id, data]) => ({ id, ...data }));
   const filteredClientes = clientesList.filter(c => {
@@ -286,19 +296,39 @@ const OrdersAdminScreen = () => {
     );
   });
 
+  const clearOrderError = (field: keyof AdminOrderFormErrors) => {
+    setOrderFormErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
   const handleOrderChange = <T extends keyof AdminOrder>(field: T, value: AdminOrder[T]) => {
+    if (field === 'comments') {
+      clearOrderError('comentarios');
+      const sanitized = sanitizeCommentText(String(value)).slice(0, MAX_COMMENT_LENGTH);
+      setOrderForm(prev => ({ ...prev, comments: sanitized }));
+      return;
+    }
     setOrderForm(prev => ({ ...prev, [field]: value }));
   };
 
   const increment = (type: 'withHandle' | 'withoutHandle') => {
     setOrderForm(prev => ({ ...prev, [type]: prev[type] + 1 }));
+    clearOrderError('cantidades');
+    clearOrderError('inventario');
   };
 
   const decrement = (type: 'withHandle' | 'withoutHandle') => {
     setOrderForm(prev => ({ ...prev, [type]: Math.max(0, prev[type] - 1) }));
+    clearOrderError('cantidades');
+    clearOrderError('inventario');
   };
 
   const totalBottlesNew = orderForm.withHandle + orderForm.withoutHandle;
+  const MAX_COMMENT_LENGTH = 250;
   const PRIORITY_MULTIPLIER: Record<string, number> = { normal: 1, alta: 1.4 };
   const basePrice = (typeof botellonPrice === 'number' && !isNaN(botellonPrice)) ? botellonPrice : 0.5;
   const highPriceAvailable = (typeof botellonPriceHigh === 'number' && !isNaN(botellonPriceHigh));
@@ -308,6 +338,7 @@ const OrdersAdminScreen = () => {
   const totalPriceNew = totalBottlesNew * costPerBottleNew;
 
   const openCreateOrderModal = () => {
+    setOrderFormErrors({});
     setShowCreateOrderModal(true);
   };
 
@@ -318,21 +349,112 @@ const OrdersAdminScreen = () => {
     setClienteSearch('');
     setSelectedClienteId(null);
     setSelectedClienteName('');
+    setOrderFormErrors({});
   };
 
   const handleSelectCliente = (id: string) => {
     setSelectedClienteId(id);
     const name = clientesMap[id]?.nombre || '';
     setSelectedClienteName(name);
+    clearOrderError('cliente');
+  };
+
+  const handleEditOrderAction = () => {
+    if (!selectedOrder) {
+      showMessage('Selecciona un pedido', 'Primero selecciona un pedido de la lista.');
+      return;
+    }
+    if (!canModifySelected) {
+      showMessage('No editable', 'Solo se pueden editar pedidos pendientes.');
+      return;
+    }
+    setOrderToEdit(selectedOrder);
+    setEditOrderModalVisible(true);
+  };
+
+  const handleCancelOrderAction = () => {
+    if (!selectedOrder) {
+      showMessage('Selecciona un pedido', 'Primero selecciona un pedido de la lista.');
+      return;
+    }
+    if (!canModifySelected) {
+      showMessage('No se puede cancelar', 'Solo se pueden cancelar pedidos pendientes.');
+      return;
+    }
+    setOrderToCancel(selectedOrder);
+    setCancelOrderModalVisible(true);
+  };
+
+  const validateOrderForm = (): boolean => {
+    const errors: AdminOrderFormErrors = {};
+    let customAlert: { title: string; message: string } | null = null;
+
+    if (!selectedClienteId) {
+      errors.cliente = 'Selecciona un cliente para continuar.';
+      customAlert = {
+        title: 'Selecciona un cliente ✨',
+        message: 'Antes de crear el pedido, elige a la persona o empresa correspondiente.',
+      };
+    }
+
+    const cantidadesNegativas = orderForm.withHandle < 0 || orderForm.withoutHandle < 0;
+    if (cantidadesNegativas) {
+      errors.cantidades = 'Las cantidades no pueden ser negativas.';
+      if (!customAlert) {
+        customAlert = {
+          title: 'Revisa las cantidades',
+          message: 'Asegúrate de ingresar valores positivos para los botellones.',
+        };
+      }
+    }
+
+    if (totalBottlesNew <= 0) {
+      errors.cantidades = 'Agrega al menos un botellón.';
+      if (!customAlert) {
+        customAlert = {
+          title: 'Agrega botellones 💧',
+          message: 'Indica cuántos botellones con o sin asa llevará el pedido.',
+        };
+      }
+    }
+
+    const inventarioInsuficiente = totalBottlesNew > sellosCantidad || totalBottlesNew > tapasCantidad;
+    if (!errors.cantidades && inventarioInsuficiente) {
+      errors.inventario = 'No hay inventario suficiente para esta cantidad.';
+      if (!customAlert) {
+        customAlert = {
+          title: 'Inventario insuficiente',
+          message: 'Reduce la cantidad o espera a reponer sellos y tapas disponibles.',
+        };
+      }
+    }
+
+    if (orderForm.comments.length > MAX_COMMENT_LENGTH) {
+      errors.comentarios = `Máximo ${MAX_COMMENT_LENGTH} caracteres en comentarios.`;
+      if (!customAlert) {
+        customAlert = {
+          title: 'Comentario muy largo',
+          message: 'Resume la instrucción para que no supere el límite permitido.',
+        };
+      }
+    }
+
+    setOrderFormErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      if (customAlert) {
+        showMessage(customAlert.title, customAlert.message);
+      } else {
+        showMessage('Datos incompletos', 'Revisa los campos resaltados antes de continuar.');
+      }
+      return false;
+    }
+
+    return true;
   };
 
   const handleCreateOrderFromAdmin = async () => {
-    if (!selectedClienteId) {
-      showMessage('Cliente requerido', 'Seleccione un cliente para crear el pedido.');
-      return;
-    }
-    if (totalBottlesNew === 0) {
-      showMessage('Cantidad inválida', 'La cantidad total de botellones debe ser mayor a 0.');
+    if (!validateOrderForm()) {
       return;
     }
 
@@ -354,7 +476,7 @@ const OrdersAdminScreen = () => {
         estado: 'pendiente',
         estadoFinanciero: 'por_cobrar' as EstadoFinanciero,
         empleadoAsignadoId: 'admin',
-        observaciones: orderForm.comments,
+        observaciones: sanitizeCommentText(orderForm.comments).slice(0, MAX_COMMENT_LENGTH),
         type: orderForm.type,
         tipo: orderForm.type,
         numeroPedido,
@@ -764,6 +886,9 @@ const OrdersAdminScreen = () => {
       const disableToPagado = estadoFinanciero === 'pagado' || isFinCancelado;
 
       const isSelected = pedido.id === selectedOrderId;
+      const observacionesSafe = pedido.observaciones
+        ? sanitizeCommentText(pedido.observaciones).slice(0, MAX_COMMENT_LENGTH)
+        : '';
 
       return (
         <TouchableOpacity
@@ -830,10 +955,10 @@ const OrdersAdminScreen = () => {
                 <Text style={styles.totalValue}>{formatCurrency(pedido.total)}</Text>
               </View>
               
-              {pedido.observaciones ? (
+              {observacionesSafe ? (
                 <View style={styles.observacionesContainer}>
                   <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
-                  <Text style={styles.observacionesText}>{pedido.observaciones}</Text>
+                  <Text style={styles.observacionesText}>{observacionesSafe}</Text>
                 </View>
               ) : null}
             </View>
@@ -989,6 +1114,7 @@ const OrdersAdminScreen = () => {
     priority: 'normal',
     type: 'recarga',
   });
+  const [editOrderErrors, setEditOrderErrors] = useState<EditOrderFormErrors>({});
 
   useEffect(() => {
     if (orderToEdit) {
@@ -999,19 +1125,83 @@ const OrdersAdminScreen = () => {
         total: orderToEdit.total,
         estado: orderToEdit.estado,
         empleadoAsignadoId: orderToEdit.empleadoAsignadoId,
-        observaciones: orderToEdit.observaciones,
+        observaciones: sanitizeCommentText(orderToEdit.observaciones || '').slice(0, MAX_COMMENT_LENGTH),
         priority: (orderToEdit as any).priority || 'normal',
         type: (orderToEdit as any).type || 'recarga',
       });
+      setEditOrderErrors({});
     }
   }, [orderToEdit]);
 
+  const clearEditError = (field: keyof EditOrderFormErrors) => {
+    setEditOrderErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
   const handleEditOrderChange = (field: string, value: any) => {
+    if (field === 'observaciones') {
+      clearEditError('comentarios');
+      const sanitized = sanitizeCommentText(String(value)).slice(0, MAX_COMMENT_LENGTH);
+      setEditOrderForm((prev) => ({ ...prev, observaciones: sanitized }));
+      return;
+    }
+    if (field === 'cantidadConAsa' || field === 'cantidadSinAsa') {
+      clearEditError('cantidades');
+    }
+    if (field === 'estado') {
+      clearEditError('estado');
+    }
+    if (field === 'costoUnitario' || field === 'total') {
+      clearEditError('numericos');
+    }
     setEditOrderForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const validateEditOrderForm = (): boolean => {
+    if (!orderToEdit) return false;
+
+    const errors: EditOrderFormErrors = {};
+    const cantidadesNegativas = editOrderForm.cantidadConAsa < 0 || editOrderForm.cantidadSinAsa < 0;
+    const totalBotellones = editOrderForm.cantidadConAsa + editOrderForm.cantidadSinAsa;
+
+    if (cantidadesNegativas || totalBotellones <= 0) {
+      errors.cantidades = 'Las cantidades deben ser positivas y sumar al menos 1.';
+    }
+
+    const allowedEstados: Array<Pedido['estado']> = ['pendiente', 'listo', 'entregado', 'cancelado'];
+    if (!allowedEstados.includes(editOrderForm.estado as Pedido['estado'])) {
+      errors.estado = 'El estado debe ser pendiente, listo, entregado o cancelado.';
+    }
+
+    const costosInvalidos = !Number.isFinite(editOrderForm.costoUnitario) || editOrderForm.costoUnitario <= 0 ||
+      !Number.isFinite(editOrderForm.total) || editOrderForm.total <= 0;
+    if (costosInvalidos) {
+      errors.numericos = 'Costo unitario y total deben ser números mayores a cero.';
+    }
+
+    if (editOrderForm.observaciones && editOrderForm.observaciones.length > MAX_COMMENT_LENGTH) {
+      errors.comentarios = `Máximo ${MAX_COMMENT_LENGTH} caracteres en comentarios.`;
+    }
+
+    setEditOrderErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      showMessage('Datos inválidos', 'Corrige los campos marcados antes de guardar.');
+      return false;
+    }
+
+    return true;
   };
 
   const handleSaveEditOrder = async () => {
     if (!orderToEdit) return;
+    if (!validateEditOrderForm()) {
+      return;
+    }
     try {
       const pedidoRef = doc(db, 'Pedidos', orderToEdit.id);
       await updateDoc(pedidoRef, {
@@ -1021,7 +1211,7 @@ const OrdersAdminScreen = () => {
         total: editOrderForm.total,
         estado: editOrderForm.estado,
         empleadoAsignadoId: editOrderForm.empleadoAsignadoId,
-        observaciones: editOrderForm.observaciones,
+        observaciones: sanitizeCommentText(editOrderForm.observaciones || '').slice(0, MAX_COMMENT_LENGTH),
         priority: editOrderForm.priority,
         type: editOrderForm.type,
         tipo: editOrderForm.type,
@@ -1029,6 +1219,7 @@ const OrdersAdminScreen = () => {
       showMessage('Éxito', 'Pedido actualizado correctamente.');
       setEditOrderModalVisible(false);
       setOrderToEdit(null);
+      setEditOrderErrors({});
     } catch (error) {
       showMessage('Error', 'No se pudo actualizar el pedido.');
     }
@@ -1062,8 +1253,45 @@ const OrdersAdminScreen = () => {
           end={{ x: 1, y: 0 }}
         >
           <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Gestión de Pedidos</Text>
-            <Text style={styles.headerSubtitle}>Panel de administración</Text>
+            <View style={styles.headerTitleContainer}>
+              <Ionicons name="receipt-outline" size={28} color={colors.textInverse} />
+              <View>
+                <Text style={styles.headerTitle}>Gestión de Pedidos</Text>
+                <Text style={styles.headerSubtitle}>Panel de administración</Text>
+              </View>
+            </View>
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.headerActionButton} onPress={openCreateOrderModal}>
+                <Ionicons name="add" size={18} color={colors.textInverse} />
+                <Text style={styles.headerActionText}>Crear Pedido</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.headerActionButton,
+                  styles.headerActionButtonSecondary,
+                  (!selectedOrder || !canModifySelected) && styles.headerActionButtonDisabled,
+                ]}
+                onPress={handleEditOrderAction}
+                disabled={!selectedOrder || !canModifySelected}
+              >
+                <Ionicons name="create" size={18} color={colors.textInverse} />
+                <Text style={styles.headerActionText}>Editar Pedido</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.headerActionButton,
+                  styles.headerActionButtonDanger,
+                  (!selectedOrder || !canModifySelected) && styles.headerActionButtonDisabled,
+                ]}
+                onPress={handleCancelOrderAction}
+                disabled={!selectedOrder || !canModifySelected}
+              >
+                <Ionicons name="trash" size={18} color={colors.textInverse} />
+                <Text style={styles.headerActionText}>Cancelar Pedido</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           <View style={styles.inventoryAlert}>
             {sellosCantidad < 200 && (
@@ -1083,60 +1311,6 @@ const OrdersAdminScreen = () => {
 
         {/* Contenido principal */}
         <View style={styles.content}>
-          {/* Acciones de Pedidos */}
-          <View style={styles.createOrderBar}>
-            <TouchableOpacity style={styles.createOrderButton} onPress={openCreateOrderModal}>
-              <Ionicons name="add-circle" size={18} color={colors.textInverse} />
-              <Text style={styles.createOrderButtonText}>Crear Pedido</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.manageOrderButton,
-                (!selectedOrder || !canModifySelected) && styles.manageOrderButtonDisabled,
-              ]}
-              onPress={() => {
-                if (!selectedOrder) {
-                  showMessage('Selecciona un pedido', 'Primero selecciona un pedido de la lista.');
-                  return;
-                }
-                if (!canModifySelected) {
-                  showMessage('No editable', 'Solo se pueden editar pedidos pendientes.');
-                  return;
-                }
-                setOrderToEdit(selectedOrder);
-                setEditOrderModalVisible(true);
-              }}
-              disabled={!selectedOrder || !canModifySelected}
-            >
-              <Ionicons name="create-outline" size={18} color={colors.secondaryDark} />
-              <Text style={styles.manageOrderButtonText}>Editar Pedido</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.manageOrderButton,
-                styles.manageOrderButtonDanger,
-                (!selectedOrder || !canModifySelected) && styles.manageOrderButtonDisabled,
-              ]}
-              onPress={() => {
-                if (!selectedOrder) {
-                  showMessage('Selecciona un pedido', 'Primero selecciona un pedido de la lista.');
-                  return;
-                }
-                if (!canModifySelected) {
-                  showMessage('No se puede cancelar', 'Solo se pueden cancelar pedidos pendientes.');
-                  return;
-                }
-                setOrderToCancel(selectedOrder);
-                setCancelOrderModalVisible(true);
-              }}
-              disabled={!selectedOrder || !canModifySelected}
-            >
-              <Ionicons name="close-circle-outline" size={20} color={colors.error} />
-              <Text style={styles.manageOrderButtonText}>Cancelar Pedido</Text>
-            </TouchableOpacity>
-          </View>
           {/* Dashboard Stats */}
           <ScrollView 
             horizontal 
@@ -1256,6 +1430,9 @@ const OrdersAdminScreen = () => {
                   <Ionicons name="person-add" size={16} color={colors.primary} />
                   <Text style={styles.registerClientText}>Registrar nuevo cliente</Text>
                 </TouchableOpacity>
+                {orderFormErrors.cliente && (
+                  <Text style={styles.errorText}>{orderFormErrors.cliente}</Text>
+                )}
               </View>
 
               {/* Tipo de Servicio */}
@@ -1307,6 +1484,12 @@ const OrdersAdminScreen = () => {
                   </View>
                 </View>
                 <Text style={styles.totalAdmin}>Total: {totalBottlesNew}</Text>
+                {orderFormErrors.cantidades && (
+                  <Text style={styles.errorText}>{orderFormErrors.cantidades}</Text>
+                )}
+                {orderFormErrors.inventario && (
+                  <Text style={styles.errorText}>{orderFormErrors.inventario}</Text>
+                )}
               </View>
 
               {/* Prioridad */}
@@ -1342,6 +1525,10 @@ const OrdersAdminScreen = () => {
                   value={orderForm.comments}
                   onChangeText={(t) => handleOrderChange('comments', t)}
                 />
+                <Text style={styles.helperText}>{orderForm.comments.length}/{MAX_COMMENT_LENGTH}</Text>
+                {orderFormErrors.comentarios && (
+                  <Text style={styles.errorText}>{orderFormErrors.comentarios}</Text>
+                )}
               </View>
 
               {/* Resumen */}
@@ -1366,7 +1553,14 @@ const OrdersAdminScreen = () => {
                 <TouchableOpacity style={styles.modalButtonCancelAdmin} onPress={closeCreateOrderModal}>
                   <Text style={styles.modalButtonTextCancelAdmin}>Cancelar</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.modalButtonConfirmAdmin} onPress={handleCreateOrderFromAdmin} disabled={creatingOrder || totalBottlesNew === 0 || !selectedClienteId}>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButtonConfirmAdmin,
+                    (totalBottlesNew === 0 || !selectedClienteId) && styles.modalButtonConfirmAdminInactive,
+                  ]}
+                  onPress={handleCreateOrderFromAdmin}
+                  disabled={creatingOrder}
+                >
                   {creatingOrder ? (
                     <ActivityIndicator color={colors.textInverse} />
                   ) : (
@@ -1460,6 +1654,9 @@ const OrdersAdminScreen = () => {
                   </View>
                 </View>
                 <Text style={styles.totalAdmin}>Total: {editOrderForm.cantidadConAsa + editOrderForm.cantidadSinAsa}</Text>
+                {editOrderErrors.cantidades && (
+                  <Text style={styles.errorText}>{editOrderErrors.cantidades}</Text>
+                )}
               </View>
 
               {/* Prioridad */}
@@ -1490,6 +1687,9 @@ const OrdersAdminScreen = () => {
                   onChangeText={(t) => handleEditOrderChange('estado', t)}
                   placeholder="pendiente, listo, entregado, cancelado..."
                 />
+                {editOrderErrors.estado && (
+                  <Text style={styles.errorText}>{editOrderErrors.estado}</Text>
+                )}
               </View>
 
               {/* Empleado asignado */}
@@ -1515,6 +1715,10 @@ const OrdersAdminScreen = () => {
                   value={editOrderForm.observaciones}
                   onChangeText={(t) => handleEditOrderChange('observaciones', t)}
                 />
+                <Text style={styles.helperText}>{(editOrderForm.observaciones || '').length}/{MAX_COMMENT_LENGTH}</Text>
+                {editOrderErrors.comentarios && (
+                  <Text style={styles.errorText}>{editOrderErrors.comentarios}</Text>
+                )}
               </View>
 
               {/* Resumen */}
@@ -1542,11 +1746,21 @@ const OrdersAdminScreen = () => {
                     keyboardType="numeric"
                   />
                 </View>
+                {editOrderErrors.numericos && (
+                  <Text style={styles.errorText}>{editOrderErrors.numericos}</Text>
+                )}
               </View>
 
               {/* Botones */}
               <View style={styles.modalButtonsAdmin}>
-                <TouchableOpacity style={styles.modalButtonCancelAdmin} onPress={() => { setEditOrderModalVisible(false); setOrderToEdit(null); }}>
+                <TouchableOpacity
+                  style={styles.modalButtonCancelAdmin}
+                  onPress={() => {
+                    setEditOrderModalVisible(false);
+                    setOrderToEdit(null);
+                    setEditOrderErrors({});
+                  }}
+                >
                   <Text style={styles.modalButtonTextCancelAdmin}>Cancelar</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalButtonConfirmAdmin} onPress={handleSaveEditOrder}>
@@ -1592,17 +1806,56 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 10,
+  },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     color: colors.textInverse,
-    marginBottom: 4,
   },
   headerSubtitle: {
     fontSize: 16,
     color: 'rgba(255,255,255,0.9)',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  headerActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  headerActionButtonSecondary: {
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  headerActionButtonDanger: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  headerActionButtonDisabled: {
+    opacity: 0.45,
+  },
+  headerActionText: {
+    color: colors.textInverse,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   inventoryAlert: {
     flexDirection: 'row',
@@ -2008,49 +2261,6 @@ const styles = StyleSheet.create({
   bottomSpacing: {
     height: 20,
   },
-  // ===== Crear Pedido (Admin) =====
-  createOrderBar: {
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  createOrderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  createOrderButtonText: {
-    color: colors.textInverse,
-    fontWeight: '600',
-  },
-  manageOrderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  manageOrderButtonDanger: {
-    borderColor: colors.error,
-  },
-  manageOrderButtonDisabled: {
-    opacity: 0.4,
-  },
-  manageOrderButtonText: {
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
   modalOverlayAdmin: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -2229,6 +2439,17 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     backgroundColor: colors.background,
   },
+  helperText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'right',
+  },
+  errorText: {
+    marginTop: 4,
+    fontSize: 13,
+    color: colors.error,
+  },
   summaryAdmin: {
     backgroundColor: colors.textPrimary,
     padding: 16,
@@ -2275,6 +2496,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: colors.primary,
     alignItems: 'center',
+  },
+  modalButtonConfirmAdminInactive: {
+    opacity: 0.8,
   },
   modalButtonTextCancelAdmin: {
     color: colors.textSecondary,

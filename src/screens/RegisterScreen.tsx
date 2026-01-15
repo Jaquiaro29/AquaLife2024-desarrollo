@@ -329,11 +329,12 @@ const RegisterScreen = ({ navigation }: any) => {
 
           {/* BOTÓN REGISTRARSE */}
           <TouchableOpacity
-            style={globalStyles.buttonPrimary}
+            style={[globalStyles.button, globalStyles.buttonPrimary, styles.registerButton]}
             onPress={handleRegister}
             disabled={loading}
           >
-            <Text style={globalStyles.buttonTextPrimary}>Registrarse</Text>
+            <Icon name="check" size={18} color={colors.textInverse} style={styles.registerIcon} />
+            <Text style={[globalStyles.buttonTextPrimary, styles.registerButtonText]}>Registrarse</Text>
           </TouchableOpacity>
 
           {/* Divisor */}
@@ -477,6 +478,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginHorizontal: 8,
+  },
+  registerButton: {
+    marginTop: 8,
+    marginBottom: 16,
+    width: '100%',
+    borderRadius: 12,
+  },
+  registerIcon: {
+    marginRight: 8,
+  },
+  registerButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.4,
   },
   loginContainer: {
     flexDirection: 'row',
