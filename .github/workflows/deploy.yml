@@ -28,7 +28,7 @@ jobs:
         env:
           EXPO_NO_TELEMETRY: 1
         run: |
-          npx expo export:web
+          npx expo export
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
