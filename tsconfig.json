@@ -5,7 +5,10 @@
     "typeRoots": ["./node_modules/@types"],
     "baseUrl": "./", // Agrega esto
     "paths": {
+      "expo-module-scripts": ["node_modules/expo-module-scripts"],
+      "expo-module-scripts/*": ["node_modules/expo-module-scripts/*"],
       "*": ["src/*"] // Opcional: si tienes todos tus archivos dentro de `src`
-    }
+    },
+    "skipLibCheck": true
   }
 }

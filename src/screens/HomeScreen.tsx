@@ -8,7 +8,9 @@ import {
   ScrollView,
   Animated,
   Dimensions,
-  StatusBar
+  StatusBar,
+  Platform,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +18,7 @@ import { globalStyles, colors } from '../styles/globalStyles';
 import Carousel from '../components/Carousel';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 380;
 
 const HomeScreen = ({ navigation }: any) => {
   const [hoveredBox, setHoveredBox] = useState<string | null>(null);
@@ -26,19 +29,34 @@ const HomeScreen = ({ navigation }: any) => {
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 1000,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   }, []);
 
+  const GOOGLE_MAPS_URL = 'https://www.google.com/maps?q=9.782553685559575,-63.19437839118026';
+  const googleStaticMapsKey = (process as any)?.env?.EXPO_PUBLIC_GOOGLE_STATIC_MAPS_KEY || '';
+  const MAP_PREVIEW_URL = googleStaticMapsKey
+    ? `https://maps.googleapis.com/maps/api/staticmap?center=9.782553685559575,-63.19437839118026&zoom=19&size=640x360&maptype=satellite&markers=color:red%7C9.782553685559575,-63.19437839118026&key=${googleStaticMapsKey}`
+    : 'https://staticmap.openstreetmap.de/staticmap.php?center=9.782553685559575,-63.19437839118026&zoom=18&size=640x360&markers=9.782553685559575,-63.19437839118026,red-pushpin';
+  const handleOpenMaps = () => {
+    Linking.openURL(GOOGLE_MAPS_URL).catch(() => {
+      // Fallback a Google Maps web
+      Linking.openURL('https://www.google.com/maps?q=Calle+Mama+Tere,+CC+Esquina+de+Tipuro,+Maturín');
+    });
+  };
+
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 100],
-    outputRange: [1, 0.9],
+    outputRange: [1, 0.95],
     extrapolate: 'clamp',
   });
 
+  const headerMax = isSmallScreen ? 88 : 100;
+  const headerMin = isSmallScreen ? 70 : 80;
+
   const headerHeight = scrollY.interpolate({
     inputRange: [0, 100],
-    outputRange: [100, 80],
+    outputRange: [headerMax, headerMin],
     extrapolate: 'clamp',
   });
 
@@ -60,28 +78,46 @@ const HomeScreen = ({ navigation }: any) => {
             />
             <Text style={styles.companyName}>AquaLife</Text>
           </View>
+          {isSmallScreen ? (
+            <View style={styles.authIcons}>
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() => navigation.navigate('Login')}
+                accessibilityLabel="Iniciar sesión"
+              >
+                <Ionicons name="log-in-outline" size={20} color={colors.textInverse} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.iconButton, styles.iconButtonFilled]}
+                onPress={() => navigation.navigate('Register')}
+                accessibilityLabel="Registrarse"
+              >
+                <Ionicons name="person-add-outline" size={20} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.authButtons}>
+              <TouchableOpacity
+                style={[styles.authButton, styles.loginButton]}
+                onPress={() => navigation.navigate('Login')}
+              >
+                <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
+              </TouchableOpacity>
 
-          <View style={styles.authButtons}>
-            <TouchableOpacity
-              style={[styles.authButton, styles.loginButton]}
-              onPress={() => navigation.navigate('Login')}
-            >
-              <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.authButton, styles.registerButton]}
-              onPress={() => navigation.navigate('Register')}
-            >
-              <Text style={styles.registerButtonText}>Registrarse</Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={[styles.authButton, styles.registerButton]}
+                onPress={() => navigation.navigate('Register')}
+              >
+                <Text style={styles.registerButtonText}>Registrarse</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </Animated.View>
 
       {/* Contenido principal */}
       <Animated.ScrollView
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, { paddingTop: headerMax }]}
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -273,10 +309,38 @@ const HomeScreen = ({ navigation }: any) => {
               </View>
             </View>
 
-            <View style={styles.mapPlaceholder}>
-              <Ionicons name="map" size={48} color={colors.primary} />
-              <Text style={styles.mapText}>Mapa Interactivo</Text>
-              <Text style={styles.mapSubtext}>Próximamente</Text>
+            <View style={styles.mapContainer}>
+              <LinearGradient
+                colors={[colors.primaryShades[100], colors.surface]}
+                style={styles.mapGradient}
+              />
+
+              <View style={styles.mapPattern}>
+                <Ionicons name="compass" size={isSmallScreen ? 100 : 140} color={colors.primary} style={styles.mapPatternIcon} />
+                <View style={styles.mapLineTop} />
+                <View style={styles.mapLineBottom} />
+                <View style={styles.mapNodeTopLeft} />
+                <View style={styles.mapNodeTopRight} />
+                <View style={styles.mapNodeBottomLeft} />
+                <View style={styles.mapNodeBottomRight} />
+              </View>
+
+              <View style={styles.mapBadge}>
+                <Ionicons name="location" size={18} color={colors.primary} />
+                <Text style={styles.mapBadgeText}>Ubicación</Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.openMapButton, isSmallScreen && styles.openMapButtonFull]}
+                onPress={handleOpenMaps}
+                accessibilityLabel="Abrir ubicación en Google Maps"
+                activeOpacity={0.85}
+              >
+                <LinearGradient colors={colors.gradientPrimary} style={styles.openMapInner}>
+                  <Ionicons name="navigate" size={20} color={colors.textInverse} />
+                  <Text style={styles.openMapButtonText}>Abrir en Google Maps</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -328,30 +392,55 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: isSmallScreen ? 12 : 20,
+    paddingVertical: isSmallScreen ? 8 : 12,
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
   },
   logo: {
-    width: 40,
-    height: 40,
-    marginRight: 12,
+    width: isSmallScreen ? 34 : 40,
+    height: isSmallScreen ? 34 : 40,
+    marginRight: isSmallScreen ? 8 : 12,
   },
   companyName: {
-    fontSize: 24,
+    fontSize: isSmallScreen ? 18 : 24,
     fontWeight: 'bold',
     color: colors.textInverse,
+    flexShrink: 1,
   },
   authButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  authIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    marginLeft: 8,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: colors.textInverse,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    backgroundColor: 'transparent',
+  },
+  iconButtonFilled: {
+    backgroundColor: colors.textInverse,
+    borderColor: 'transparent',
   },
   authButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: isSmallScreen ? 10 : 16,
+    paddingVertical: isSmallScreen ? 8 : 10,
     borderRadius: 25,
     borderWidth: 2,
   },
@@ -366,18 +455,18 @@ const styles = StyleSheet.create({
   loginButtonText: {
     color: colors.textInverse,
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: isSmallScreen ? 12 : 14,
   },
   registerButtonText: {
     color: colors.primary,
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: isSmallScreen ? 12 : 14,
   },
   contentContainer: {
-    paddingTop: 100,
+    // paddingTop set dynamically to match header height
   },
   heroSection: {
-    minHeight: screenHeight * 0.8,
+    minHeight: screenHeight * (isSmallScreen ? 0.7 : 0.8),
   },
   heroGradient: {
     flex: 1,
@@ -388,31 +477,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   heroTitle: {
-    fontSize: 48,
+    fontSize: isSmallScreen ? 32 : 48,
     fontWeight: 'bold',
     color: colors.textPrimary,
     textAlign: 'center',
-    lineHeight: 52,
+    lineHeight: isSmallScreen ? 36 : 52,
     marginBottom: 16,
   },
   heroTitleAccent: {
     color: colors.primary,
   },
   heroSubtitle: {
-    fontSize: 18,
+    fontSize: isSmallScreen ? 14 : 18,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: isSmallScreen ? 20 : 24,
     marginBottom: 40,
   },
   heroStats: {
-    flexDirection: 'row',
+    flexDirection: isSmallScreen ? 'column' : 'row',
     justifyContent: 'space-around',
     width: '100%',
-    marginBottom: 40,
+    marginBottom: 24,
   },
   statItem: {
     alignItems: 'center',
+    marginBottom: isSmallScreen ? 12 : 0,
   },
   statNumber: {
     fontSize: 24,
@@ -429,26 +519,31 @@ const styles = StyleSheet.create({
   ctaButton: {
     borderRadius: 30,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    ...Platform.select({
+      web: { boxShadow: '0px 4px 8px rgba(0,0,0,0.3)' },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+      },
+    }),
   },
   ctaGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: isSmallScreen ? 20 : 32,
     paddingVertical: 16,
-    gap: 8,
   },
   ctaText: {
     color: colors.textInverse,
     fontSize: 18,
     fontWeight: 'bold',
+    marginRight: 8,
   },
   featuresSection: {
-    padding: 40,
+    padding: isSmallScreen ? 20 : 40,
     backgroundColor: colors.surface,
   },
   sectionTitle: {
@@ -465,21 +560,28 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   featuresGrid: {
-    flexDirection: 'row',
+    flexDirection: isSmallScreen ? 'column' : 'row',
     justifyContent: 'space-between',
-    gap: 20,
+    // use margins on children instead of gap for RN compatibility
   },
   featureCard: {
     flex: 1,
     backgroundColor: colors.background,
-    padding: 24,
+    padding: isSmallScreen ? 16 : 24,
     borderRadius: 20,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    marginBottom: isSmallScreen ? 16 : 0,
+    marginRight: isSmallScreen ? 0 : 12,
+    ...Platform.select({
+      web: { boxShadow: '0px 4px 12px rgba(0,0,0,0.1)' },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 5,
+      },
+    }),
   },
   featureIcon: {
     width: 80,
@@ -503,10 +605,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   missionSection: {
-    marginVertical: 40,
+    marginVertical: isSmallScreen ? 20 : 40,
   },
   missionGradient: {
-    padding: 40,
+    padding: isSmallScreen ? 20 : 40,
   },
   missionTitle: {
     fontSize: 32,
@@ -516,29 +618,41 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   missionVisionContainer: {
-    flexDirection: 'row',
-    gap: 20,
+    flexDirection: isSmallScreen ? 'column' : 'row',
+    // gap handled with margin on cards
   },
   missionVisionCard: {
     flex: 1,
     backgroundColor: colors.background,
-    padding: 30,
+    padding: isSmallScreen ? 18 : 30,
     borderRadius: 20,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
+    ...Platform.select({
+      web: { boxShadow: '0px 8px 16px rgba(0,0,0,0.2)' },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.2,
+        shadowRadius: 16,
+        elevation: 8,
+      },
+    }),
     transform: [{ scale: 1 }],
+    marginRight: isSmallScreen ? 0 : 20,
+    marginBottom: isSmallScreen ? 12 : 0,
   },
   hoveredCard: {
     transform: [{ scale: 1.05 }],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 12,
+    ...Platform.select({
+      web: { boxShadow: '0px 12px 20px rgba(0,0,0,0.3)' },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+        elevation: 12,
+      },
+    }),
   },
   cardIcon: {
     width: 80,
@@ -584,13 +698,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   locationSection: {
-    padding: 40,
+    padding: isSmallScreen ? 20 : 40,
     backgroundColor: colors.surface,
   },
   locationContent: {
-    flexDirection: 'row',
-    gap: 40,
-    alignItems: 'flex-start',
+    flexDirection: isSmallScreen ? 'column' : 'row',
+    alignItems: 'stretch',
   },
   locationInfo: {
     flex: 1,
@@ -610,38 +723,171 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: 20,
-    gap: 12,
   },
   addressContainer: {
     flex: 1,
+    marginLeft: 12,
   },
   locationText: {
     fontSize: 14,
     color: colors.textSecondary,
     marginBottom: 4,
   },
-  mapPlaceholder: {
-    flex: 1,
+  mapContainer: {
     backgroundColor: colors.primaryShades[100],
-    borderRadius: 20,
-    padding: 40,
+    borderRadius: 16,
+    padding: isSmallScreen ? 14 : 20,
+    alignItems: 'stretch',
+    justifyContent: 'center',
+    width: '100%',
+    maxWidth: isSmallScreen ? undefined : 520,
+    flex: isSmallScreen ? undefined : 1,
+    alignSelf: 'stretch',
+    marginTop: isSmallScreen ? 20 : 0,
+    minHeight: isSmallScreen ? 140 : 160,
+    position: 'relative',
+    overflow: 'hidden',
+    ...Platform.select({
+      web: { boxShadow: '0px 6px 14px rgba(0,0,0,0.12)' },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.12,
+        shadowRadius: 14,
+        elevation: 6,
+      },
+    }),
+  },
+  mapGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mapPattern: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 200,
+    ...Platform.select({ web: { pointerEvents: 'none' } }),
   },
-  mapText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+  mapPatternIcon: {
+    opacity: 0.08,
+  },
+  mapLineBase: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primaryShades[200],
+    borderStyle: 'dashed',
+    opacity: 0.25,
+  },
+  mapLineTop: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: isSmallScreen ? 42 : 52,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primaryShades[200],
+    borderStyle: 'dashed',
+    opacity: 0.25,
+  },
+  mapLineBottom: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: isSmallScreen ? 42 : 52,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primaryShades[200],
+    borderStyle: 'dashed',
+    opacity: 0.25,
+  },
+  mapNodeBase: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    opacity: 0.4,
+  },
+  mapNodeTopLeft: {
+    position: 'absolute',
+    left: 20,
+    top: (isSmallScreen ? 42 : 52) - 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    opacity: 0.4,
+  },
+  mapNodeTopRight: {
+    position: 'absolute',
+    right: 20,
+    top: (isSmallScreen ? 42 : 52) - 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    opacity: 0.4,
+  },
+  mapNodeBottomLeft: {
+    position: 'absolute',
+    left: 20,
+    bottom: (isSmallScreen ? 42 : 52) - 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    opacity: 0.4,
+  },
+  mapNodeBottomRight: {
+    position: 'absolute',
+    right: 20,
+    bottom: (isSmallScreen ? 42 : 52) - 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    opacity: 0.4,
+  },
+  mapBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    marginBottom: 12,
+  },
+  mapBadgeText: {
+    marginLeft: 6,
     color: colors.primary,
-    marginTop: 12,
+    fontWeight: '600',
   },
-  mapSubtext: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 4,
+  openMapButton: {
+    marginTop: 0,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    minWidth: isSmallScreen ? undefined : 280,
+  },
+  openMapButtonFull: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  openMapInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 28,
+  },
+  openMapButtonText: {
+    color: colors.textInverse,
+    fontWeight: '600',
   },
   footer: {
-    padding: 40,
+    padding: isSmallScreen ? 20 : 40,
     alignItems: 'center',
   },
   footerTitle: {
@@ -658,12 +904,13 @@ const styles = StyleSheet.create({
   },
   footerButtons: {
     flexDirection: 'row',
-    gap: 30,
+    justifyContent: 'center',
     marginBottom: 30,
   },
   footerButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
+    marginHorizontal: 12,
   },
   footerButtonText: {
     color: colors.textInverse,

@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Platform,
+  StatusBar,
+  Dimensions,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types/navigation'; // Ajusta según tu proyecto
@@ -30,6 +33,9 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const { width: screenWidth } = Dimensions.get('window');
+  const isSmallScreen = screenWidth < 380;
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -151,14 +157,14 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
     <>
       {/* Botón en la esquina superior izquierda para ir a HomeScreen */}
       <TouchableOpacity
-        style={styles.homeButton}
+        style={[styles.homeButton, { top: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 8 : 40 }]}
         onPress={() => navigation.navigate('Home')}
       >
         <Text style={styles.homeButtonText}>Home</Text>
       </TouchableOpacity>
 
-      <View style={styles.outerContainer}>
-        <View style={styles.innerContainer}>
+      <View style={[styles.outerContainer, { paddingBottom: isSmallScreen ? 40 : 20 }]}>
+        <View style={[styles.innerContainer, { maxWidth: isSmallScreen ? '100%' : 400 }] }>
           <Text style={styles.titleText}>
             Iniciar Sesión
           </Text>
@@ -230,16 +236,20 @@ const styles = StyleSheet.create({
   },
   innerContainer: {
     width: '100%',
-    maxWidth: 400,
     alignSelf: 'center',
     backgroundColor: colors.background,
     borderRadius: 10,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    ...Platform.select({
+      web: { boxShadow: '0px 2px 4px rgba(0,0,0,0.2)' },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
+      },
+    }),
   },
   titleText: {
     fontSize: 22,
@@ -303,8 +313,7 @@ const styles = StyleSheet.create({
   },
   homeButton: {
     position: 'absolute',
-    top: 20,
-    left: 20,
+    left: 16,
     padding: 10,
     backgroundColor: colors.primary,
     borderRadius: 5,

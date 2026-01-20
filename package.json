@@ -2,13 +2,15 @@
   "name": "aqualife",
   "version": "1.0.0",
   "main": "expo/AppEntry.js",
+  "homepage": "https://www.aqualifeweb.com",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "predeploy": "expo export:web",
-    "deploy": "gh-pages -d web-build"
+    "postinstall": "patch-package",
+    "predeploy": "expo export --platform web --output-dir web-build && node scripts/add-cname.js && node scripts/fix-ghpages-paths.js && node scripts/add-404.js && node scripts/add-nojekyll.js",
+    "deploy": "gh-pages -d web-build --dotfiles"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.2.3",
@@ -40,11 +42,15 @@
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
+    "crypto-browserify": "^3.12.0",
     "gh-pages": "^6.0.0",
+    "stream-browserify": "^3.0.0",
     "@types/react": "~18.2.45",
     "@types/react-native": "^0.72.8",
     "@types/react-native-vector-icons": "^6.4.18",
-    "typescript": "~5.3.3"
+    "typescript": "~5.3.3",
+    "expo-module-scripts": "^3.2.0",
+    "patch-package": "^8.0.0"
   },
   "private": true
 }

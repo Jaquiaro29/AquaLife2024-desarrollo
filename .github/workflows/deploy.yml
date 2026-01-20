@@ -28,7 +28,13 @@ jobs:
         env:
           EXPO_NO_TELEMETRY: 1
         run: |
-          npx expo export:web
+          npx expo export --platform web --output-dir web-build --public-url https://jaquiaro29.github.io/AquaLife2024-desarrollo
+        - name: Patch asset paths for GitHub Pages
+          run: |
+            node scripts/fix-ghpages-paths.js
+        - name: Add SPA 404 redirect
+          run: |
+            node scripts/add-404.js
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

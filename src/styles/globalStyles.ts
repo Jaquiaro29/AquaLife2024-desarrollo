@@ -1,4 +1,4 @@
-import { StyleSheet, Dimensions } from "react-native";
+import { StyleSheet, Dimensions, Platform } from "react-native";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -138,6 +138,13 @@ const shadows = {
   },
 };
 
+// Equivalentes para Web (react-native-web recomienda usar boxShadow)
+const webBoxShadows = {
+  small: { boxShadow: "0px 2px 4px rgba(0,0,0,0.1)" },
+  medium: { boxShadow: "0px 4px 8px rgba(0,0,0,0.15)" },
+  large: { boxShadow: "0px 8px 16px rgba(0,0,0,0.2)" },
+};
+
 // Estilos globales reutilizables
 const globalStyles = StyleSheet.create({
   // Layout
@@ -214,11 +221,11 @@ const globalStyles = StyleSheet.create({
   },
   buttonPrimary: {
     backgroundColor: colors.primary,
-    ...shadows.small,
+    ...(Platform.OS === 'web' ? webBoxShadows.small : shadows.small),
   },
   buttonSecondary: {
     backgroundColor: colors.secondary,
-    ...shadows.small,
+    ...(Platform.OS === 'web' ? webBoxShadows.small : shadows.small),
   },
   buttonOutline: {
     backgroundColor: 'transparent',
@@ -286,13 +293,13 @@ const globalStyles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: borderRadius.large,
     padding: spacings.large,
-    ...shadows.small,
+    ...(Platform.OS === 'web' ? webBoxShadows.small : shadows.small),
   },
   cardElevated: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.large,
     padding: spacings.large,
-    ...shadows.medium,
+    ...(Platform.OS === 'web' ? webBoxShadows.medium : shadows.medium),
   },
   
   // Badges

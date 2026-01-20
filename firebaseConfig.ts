@@ -2,15 +2,36 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import Constants from "expo-constants";
+
+// Leer config inyectada vía app.config.js (extra.firebase)
+const firebaseExtra =
+  (Constants?.expoConfig as any)?.extra?.firebase ||
+  (Constants as any)?.manifest?.extra?.firebase;
+
+const required = [
+  "apiKey",
+  "authDomain",
+  "projectId",
+  "storageBucket",
+  "messagingSenderId",
+  "appId",
+];
+
+for (const key of required) {
+  if (!firebaseExtra?.[key] || String(firebaseExtra[key]).trim().length === 0) {
+    throw new Error(`Falta la variable de entorno ${key} en extra.firebase. Configura tu .env y reconstruye.`);
+  }
+}
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBs-F5DsK-jlEPoCZkaVsXJBwt91OBoEBg",
-  authDomain: "aqualife2024-4b5fd.firebaseapp.com",
-  projectId: "aqualife2024-4b5fd",
-  storageBucket: "aqualife2024-4b5fd.firebasestorage.app",
-  messagingSenderId: "642616945035",
-  appId: "1:642616945035:web:6e390fcb0f394baab8278e",
-  measurementId: "G-2W09HBRVK1"
+  apiKey: firebaseExtra.apiKey as string,
+  authDomain: firebaseExtra.authDomain as string,
+  projectId: firebaseExtra.projectId as string,
+  storageBucket: firebaseExtra.storageBucket as string,
+  messagingSenderId: firebaseExtra.messagingSenderId as string,
+  appId: firebaseExtra.appId as string,
+  measurementId: firebaseExtra.measurementId as string | undefined,
 };
 
 const app = initializeApp(firebaseConfig);

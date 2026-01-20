@@ -9,6 +9,9 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { db } from '../../firebaseConfig';
@@ -47,6 +50,9 @@ const RegisterScreen = ({ navigation }: any) => {
   const [showPassConfirm, setShowPassConfirm] = useState(false);
 
   const [loading, setLoading] = useState(false);
+
+  const { width: screenWidth } = Dimensions.get('window');
+  const isSmallScreen = screenWidth < 380;
 
   // ==================== Reglas de validación ====================
   const passwordRegex =
@@ -220,8 +226,17 @@ const RegisterScreen = ({ navigation }: any) => {
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.outerContainer}>
-        <View style={styles.innerContainer}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+      >
+        <ScrollView
+          contentContainerStyle={[styles.outerContainer, { padding: isSmallScreen ? 16 : 20, paddingBottom: isSmallScreen ? 32 : 24 }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          <View style={styles.innerContainer}>
           <Text style={[globalStyles.title, styles.titleText]}>
             Crear una cuenta
           </Text>
@@ -359,7 +374,7 @@ const RegisterScreen = ({ navigation }: any) => {
           </View>
 
           {/* Botones de registro social */}
-          <View style={styles.socialButtonsContainer}>
+          <View style={[styles.socialButtonsContainer, isSmallScreen ? { flexWrap: 'wrap' } : {}]}>
             <TouchableOpacity 
                 style={[styles.socialButton, { backgroundColor: socialColors.google }]}
               onPress={() => handleSocialRegister('Google')}
@@ -396,8 +411,9 @@ const RegisterScreen = ({ navigation }: any) => {
               <Text style={styles.loginLink}>Inicia sesión</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </ScrollView>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
       <Toast />
     </>
   );
@@ -412,16 +428,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   innerContainer: {
-    width: '90%',
-    maxWidth: 400,
-    padding: 20,
+    width: '92%',
+    maxWidth: 420,
+    padding: 18,
     backgroundColor: colors.background,
     borderRadius: 10,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
+    ...Platform.select({
+      web: { boxShadow: '0px 4px 10px rgba(0,0,0,0.2)' },
+      default: {
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+      },
+    }),
   },
   titleText: {
     marginBottom: 20,
