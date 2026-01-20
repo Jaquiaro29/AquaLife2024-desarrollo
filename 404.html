@@ -3,17 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <title>Redirecting...</title>
-    <meta http-equiv="refresh" content="0; URL='/AquaLife2024-desarrollo/'" />
+    <meta http-equiv="refresh" content="0; URL='/'" />
     <script>
       (function() {
-        var repo = '/AquaLife2024-desarrollo';
-        var fullPath = window.location.pathname;
-        // If already under repo, keep it; otherwise redirect to repo root
-        if (!fullPath.startsWith(repo)) {
-          window.location.replace(repo + '/');
-        } else {
-          window.location.replace(repo + '/');
-        }
+        var base = '';
+        var target = base || '/';
+        window.location.replace(target);
       })();
     </script>
   </head>
