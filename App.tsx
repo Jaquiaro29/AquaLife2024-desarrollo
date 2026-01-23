@@ -140,7 +140,7 @@ const App = () => {
   }
 
   return (
-    <InactivityProvider timeoutMs={30 * 60 * 1000}>
+    <InactivityProvider timeoutMs={15 * 60 * 1000}>
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {user ? (
