@@ -42,27 +42,31 @@ const MainDrawerNavigator = ({ route }: { route: any }) => {
     >
       {userType === 'admin' ? (
         <>
-          <Drawer.Screen name="Dashboard" component={DashboardScreen} />
-          <Drawer.Screen name="Sales" component={SalesScreen} />
-          <Drawer.Screen name="Stats" component={StatsScreen} />
-          <Drawer.Screen name="Inventory" component={InventoryScreen} />
-          <Drawer.Screen name="Maintenance" component={MaintenanceScreen} />
-          <Drawer.Screen name="Invoices" component={InvoicesScreen} />
-          <Drawer.Screen name="Providers" component={ProvidersScreen} />
-          <Drawer.Screen name="OrdersA" component={OrdersAdminScreen} />
-          <Drawer.Screen name="Create" component={CreateScreenUser} />
+          <Drawer.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Panel' }} />
+          <Drawer.Screen name="Sales" component={SalesScreen} options={{ title: 'Ventas' }} />
+          <Drawer.Screen name="Stats" component={StatsScreen} options={{ title: 'Estadísticas' }} />
+          <Drawer.Screen name="Inventory" component={InventoryScreen} options={{ title: 'Inventario' }} />
+          <Drawer.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Mantenimiento' }} />
+          <Drawer.Screen name="Invoices" component={InvoicesScreen} options={{ title: 'Facturas' }} />
+          <Drawer.Screen name="Providers" component={ProvidersScreen} options={{ title: 'Proveedores' }} />
+          <Drawer.Screen name="OrdersA" component={OrdersAdminScreen} options={{ title: 'Pedidos (admin)' }} />
+          <Drawer.Screen name="Create" component={CreateScreenUser} options={{ title: 'Crear usuario' }} />
           
         </>
       ) : (
-        <Drawer.Screen name="UserDashboard" component={UserDashboardScreen} />
+        <Drawer.Screen name="UserDashboard" component={UserDashboardScreen} options={{ title: 'Panel de usuario' }} />
         
       )}
 
       {/* Opciones comunes */}
-      <Drawer.Screen name="User" component={UserScreen} />
-      {userType !== 'admin' && <Drawer.Screen name="dashboard" component={ UserDashboardScreen} />}
-     
-      {userType !== 'admin' && <Drawer.Screen name="Orders" component={OrdersScreen} />}
+      <Drawer.Screen name="User" component={UserScreen} options={{ title: 'Perfil' }} />
+      {userType !== 'admin' && (
+        <Drawer.Screen name="dashboard" component={UserDashboardScreen} options={{ title: 'Panel' }} />
+      )}
+      
+      {userType !== 'admin' && (
+        <Drawer.Screen name="Orders" component={OrdersScreen} options={{ title: 'Pedidos' }} />
+      )}
 
     </Drawer.Navigator>
   );
