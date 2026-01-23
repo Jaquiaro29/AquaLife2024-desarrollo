@@ -19,7 +19,8 @@ import SalesScreen from './src/screens/SalesScreen';
 import StatsScreen from './src/screens/StatsScreen';
 import InventoryScreen from './src/screens/InventoryScreen';
 import MaintenanceScreen from './src/screens/MaintenanceScreen';
-import InvoicesScreen from './src/screens/InvoicesScreen';
+import InvoicesAdminScreen from './src/screens/InvoicesAdminScreen';
+import UserInvoicesScreen from './src/screens/UserInvoicesScreen';
 import ProvidersScreen from './src/screens/ProvidersScreen';
 import OrdersAdminScreen from './src/screens/OrdersAdminScreen';
 import CreateScreenUser from './src/screens/CreateScreenUser';
@@ -27,6 +28,7 @@ import CreateScreenUser from './src/screens/CreateScreenUser';
 
 // Drawer personalizado
 import CustomDrawerContent from './src/components/CustomDrawerContent';
+import InactivityProvider from './src/components/InactivityProvider';
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -42,27 +44,33 @@ const MainDrawerNavigator = ({ route }: { route: any }) => {
     >
       {userType === 'admin' ? (
         <>
-          <Drawer.Screen name="Dashboard" component={DashboardScreen} />
-          <Drawer.Screen name="Sales" component={SalesScreen} />
-          <Drawer.Screen name="Stats" component={StatsScreen} />
-          <Drawer.Screen name="Inventory" component={InventoryScreen} />
-          <Drawer.Screen name="Maintenance" component={MaintenanceScreen} />
-          <Drawer.Screen name="Invoices" component={InvoicesScreen} />
-          <Drawer.Screen name="Providers" component={ProvidersScreen} />
-          <Drawer.Screen name="OrdersA" component={OrdersAdminScreen} />
-          <Drawer.Screen name="Create" component={CreateScreenUser} />
+          <Drawer.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Panel' }} />
+          <Drawer.Screen name="Sales" component={SalesScreen} options={{ title: 'Ventas' }} />
+          <Drawer.Screen name="Stats" component={StatsScreen} options={{ title: 'Estadísticas' }} />
+          <Drawer.Screen name="Inventory" component={InventoryScreen} options={{ title: 'Inventario' }} />
+          <Drawer.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Mantenimiento' }} />
+          <Drawer.Screen name="Invoices" component={InvoicesAdminScreen} options={{ title: 'Facturas' }} />
+          <Drawer.Screen name="Providers" component={ProvidersScreen} options={{ title: 'Proveedores' }} />
+          <Drawer.Screen name="OrdersA" component={OrdersAdminScreen} options={{ title: 'Pedidos (admin)' }} />
+          <Drawer.Screen name="Create" component={CreateScreenUser} options={{ title: 'Crear usuario' }} />
           
         </>
       ) : (
-        <Drawer.Screen name="UserDashboard" component={UserDashboardScreen} />
-        
+        <>
+          <Drawer.Screen name="UserDashboard" component={UserDashboardScreen} options={{ title: 'Panel de usuario' }} />
+          <Drawer.Screen name="UserInvoices" component={UserInvoicesScreen} options={{ title: 'Facturas' }} />
+        </>
       )}
 
       {/* Opciones comunes */}
-      <Drawer.Screen name="User" component={UserScreen} />
-      {userType !== 'admin' && <Drawer.Screen name="dashboard" component={ UserDashboardScreen} />}
-     
-      {userType !== 'admin' && <Drawer.Screen name="Orders" component={OrdersScreen} />}
+      <Drawer.Screen name="User" component={UserScreen} options={{ title: 'Perfil' }} />
+      {userType !== 'admin' && (
+        <Drawer.Screen name="dashboard" component={UserDashboardScreen} options={{ title: 'Panel' }} />
+      )}
+      
+      {userType !== 'admin' && (
+        <Drawer.Screen name="Orders" component={OrdersScreen} options={{ title: 'Pedidos' }} />
+      )}
 
     </Drawer.Navigator>
   );
@@ -135,27 +143,29 @@ const App = () => {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
-          // Si hay usuario logueado, ir directo al drawer (pasando userType como initialParams)
-          <Stack.Screen
-            name="MainDrawer"
-            component={MainDrawerNavigator}
-            options={{ headerShown: false }}
-            initialParams={{ userType }}
-          />
-        ) : (
-          // Usuario no autenticado: pantalla pública
-          <>
-            <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-          </>
-        )}
+    <InactivityProvider timeoutMs={15 * 60 * 1000}>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {user ? (
+            // Si hay usuario logueado, ir directo al drawer (pasando userType como initialParams)
+            <Stack.Screen
+              name="MainDrawer"
+              component={MainDrawerNavigator}
+              options={{ headerShown: false }}
+              initialParams={{ userType }}
+            />
+          ) : (
+            // Usuario no autenticado: pantalla pública
+            <>
+              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="Register" component={RegisterScreen} />
+            </>
+          )}
 
-      </Stack.Navigator>
-    </NavigationContainer>
+        </Stack.Navigator>
+      </NavigationContainer>
+    </InactivityProvider>
   );
 };
 

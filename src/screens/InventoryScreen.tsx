@@ -32,6 +32,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../styles/globalStyles';
 
 const { width } = Dimensions.get('window');
+const isSmallScreen = width < 520;
 
 interface ArticuloDoc {
   id: string;
@@ -497,6 +498,47 @@ const InventoryScreen = () => {
     setShowSelectEditModal(false);
   };
 
+  const headerActionButtons = (
+    <>
+      <TouchableOpacity 
+        style={styles.addButton} 
+        onPress={() => {
+          setEditingId(null);
+          setNombre('');
+          setCategoria('');
+          setCategoriaSeleccionada('');
+          setUseExistingCategory(categoriasUnicas.length > 0);
+          setCantidad(0);
+          setUnidad('');
+          setUnidadSeleccionada('');
+          setUseExistingUnit(true);
+          setShowArticuloModal(true);
+        }}
+      >
+        <Ionicons name="add" size={20} color={colors.textInverse} />
+        <Text style={styles.addButtonText}>Nuevo Artículo</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.editTopButton, isSmallScreen && styles.headerActionButtonSpacing]}
+        onPress={() => setShowSelectEditModal(true)}
+      >
+        <Ionicons name="create" size={18} color={colors.textInverse} />
+        <Text style={styles.deleteTopButtonText}>Editar Artículo</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.deleteTopButton, isSmallScreen && styles.headerActionButtonSpacing]}
+        onPress={() => setShowDeleteModal(true)}
+      >
+        <Ionicons name="trash" size={18} color={colors.textInverse} />
+        <Text style={styles.deleteTopButtonText}>
+          Eliminar Artículo
+        </Text>
+      </TouchableOpacity>
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor={colors.secondaryDark} barStyle="light-content" />
@@ -513,49 +555,24 @@ const InventoryScreen = () => {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         >
-          <View style={styles.headerContent}>
+          <View style={[styles.headerContent, isSmallScreen && styles.headerContentStack]}>
             <View style={styles.headerTitleContainer}>
               <Ionicons name="cube" size={28} color={colors.textInverse} />
               <Text style={styles.headerTitle}>Gestión de Inventario</Text>
             </View>
-            <View style={styles.headerActions}>
-              <TouchableOpacity 
-                style={styles.addButton} 
-                onPress={() => {
-                  setEditingId(null);
-                  setNombre('');
-                  setCategoria('');
-                  setCategoriaSeleccionada('');
-                  setUseExistingCategory(categoriasUnicas.length > 0);
-                  setCantidad(0);
-                  setUnidad('');
-                  setUnidadSeleccionada('');
-                  setUseExistingUnit(true);
-                  setShowArticuloModal(true);
-                }}
+            {isSmallScreen ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.headerActionsHorizontal}
               >
-                <Ionicons name="add" size={20} color={colors.textInverse} />
-                <Text style={styles.addButtonText}>Nuevo Artículo</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.editTopButton}
-                onPress={() => setShowSelectEditModal(true)}
-              >
-                <Ionicons name="create" size={18} color={colors.textInverse} />
-                <Text style={styles.deleteTopButtonText}>Editar Artículo</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.deleteTopButton}
-                onPress={() => setShowDeleteModal(true)}
-              >
-                <Ionicons name="trash" size={18} color={colors.textInverse} />
-                <Text style={styles.deleteTopButtonText}>
-                  Eliminar Artículo
-                </Text>
-              </TouchableOpacity>
-            </View>
+                {headerActionButtons}
+              </ScrollView>
+            ) : (
+              <View style={styles.headerActions}>
+                {headerActionButtons}
+              </View>
+            )}
           </View>
         </LinearGradient>
 
@@ -1195,6 +1212,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  headerContentStack: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
   headerTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1208,6 +1230,16 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  headerActionsHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+    marginTop: 6,
+  },
+  headerActionButtonSpacing: {
+    marginLeft: 0,
   },
   addButton: {
     flexDirection: 'row',

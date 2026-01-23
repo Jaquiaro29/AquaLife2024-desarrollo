@@ -41,11 +41,17 @@ for (const key of required) {
   }
 }
 
+// Normaliza storageBucket en caso de que venga con dominio incorrecto
+const normalizeBucket = (b?: string) => {
+  if (!b) return b as any;
+  return b.endsWith('.firebasestorage.app') ? b.replace('.firebasestorage.app', '.appspot.com') : b;
+};
+
 const firebaseConfig = {
   apiKey: firebaseExtra.apiKey as string,
   authDomain: firebaseExtra.authDomain as string,
   projectId: firebaseExtra.projectId as string,
-  storageBucket: firebaseExtra.storageBucket as string,
+  storageBucket: normalizeBucket(firebaseExtra.storageBucket) as string,
   messagingSenderId: firebaseExtra.messagingSenderId as string,
   appId: firebaseExtra.appId as string,
   measurementId: firebaseExtra.measurementId as string | undefined,

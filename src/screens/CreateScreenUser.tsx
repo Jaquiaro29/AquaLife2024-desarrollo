@@ -39,8 +39,54 @@ import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types/navigation';
 
 const { width } = Dimensions.get('window');
+const isSmallScreen = width < 520;
 
 const CLIENT_GRADIENT = colors.gradientPrimary;
+
+// Web-safe shadows: use boxShadow on web, keep native shadows elsewhere
+const shadow2 = Platform.select({
+  web: { boxShadow: '0px 1px 3px rgba(0,0,0,0.10)' } as any,
+  default: {
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+});
+
+const shadow3 = Platform.select({
+  web: { boxShadow: '0px 2px 6px rgba(0,0,0,0.08)' } as any,
+  default: {
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+  },
+});
+
+const shadow5 = Platform.select({
+  web: { boxShadow: '0px 4px 10px rgba(0,0,0,0.10)' } as any,
+  default: {
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+});
+
+const shadow6 = Platform.select({
+  web: { boxShadow: '0px 3px 8px rgba(0,0,0,0.12)' } as any,
+  default: {
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+});
 
 type ActiveTab = 'todos' | 'admins' | 'clientes';
 
@@ -1301,6 +1347,31 @@ const CreateUserScreen = () => {
 
   // Edit modal se define más abajo
 
+  const headerActionButtons = (
+    <>
+      <TouchableOpacity style={styles.headerAddButton} onPress={openCreateFromHeader}>
+        <FontAwesome5 name="user-plus" size={16} color={colors.textInverse} />
+        <Text style={styles.headerActionText}>Nuevo Usuario</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.headerEditButton, isSmallScreen && styles.headerActionButtonSpacing]}
+        onPress={handleEditFromHeader}
+      >
+        <FontAwesome5 name="edit" size={14} color={colors.textInverse} />
+        <Text style={styles.headerActionText}>Editar</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.headerDeleteButton, isSmallScreen && styles.headerActionButtonSpacing]}
+        onPress={() => handleDelete()}
+      >
+        <FontAwesome5 name="trash" size={14} color={colors.textInverse} />
+        <Text style={styles.headerActionText}>Eliminar</Text>
+      </TouchableOpacity>
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor={colors.secondaryDark} barStyle="light-content" />
@@ -1317,45 +1388,59 @@ const CreateUserScreen = () => {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         >
-          <View style={styles.headerContent}>
+          <View style={[styles.headerContent, isSmallScreen && styles.headerContentStack]}>
             <View style={styles.headerTitleContainer}>
               <FontAwesome5 name="users-cog" size={24} color={colors.textInverse} />
               <Text style={styles.headerTitle}>Gestión de Usuarios</Text>
             </View>
 
-            <View style={styles.headerRight}>
-              <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.headerAddButton} onPress={openCreateFromHeader}>
-                  <FontAwesome5 name="user-plus" size={16} color={colors.textInverse} />
-                  <Text style={styles.headerActionText}>Nuevo Usuario</Text>
-                </TouchableOpacity>
+            {isSmallScreen ? (
+              <>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.headerActionsHorizontal}
+                >
+                  {headerActionButtons}
+                </ScrollView>
 
-                <TouchableOpacity style={styles.headerEditButton} onPress={handleEditFromHeader}>
-                  <FontAwesome5 name="edit" size={14} color={colors.textInverse} />
-                  <Text style={styles.headerActionText}>Editar</Text>
-                </TouchableOpacity>
+                <View style={[styles.statsContainer, styles.statsContainerMobile]}>
+                  <View style={[styles.statItem, styles.statItemMobile]}>
+                    <Text style={styles.statNumber}>{listaUsuarios.length}</Text>
+                    <Text style={styles.statLabel}>Admins</Text>
+                  </View>
+                  <View style={[styles.statItem, styles.statItemMobile]}>
+                    <Text style={styles.statNumber}>{listaClientes.length}</Text>
+                    <Text style={styles.statLabel}>Clientes</Text>
+                  </View>
+                  <View style={[styles.statItem, styles.statItemMobile]}>
+                    <Text style={styles.statNumber}>{listaUsuarios.length + listaClientes.length}</Text>
+                    <Text style={styles.statLabel}>Total</Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View style={styles.headerRight}>
+                <View style={styles.headerActions}>
+                  {headerActionButtons}
+                </View>
 
-                <TouchableOpacity style={styles.headerDeleteButton} onPress={() => handleDelete()}>
-                  <FontAwesome5 name="trash" size={14} color={colors.textInverse} />
-                  <Text style={styles.headerActionText}>Eliminar</Text>
-                </TouchableOpacity>
+                <View style={styles.statsContainer}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNumber}>{listaUsuarios.length}</Text>
+                    <Text style={styles.statLabel}>Admins</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNumber}>{listaClientes.length}</Text>
+                    <Text style={styles.statLabel}>Clientes</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNumber}>{listaUsuarios.length + listaClientes.length}</Text>
+                    <Text style={styles.statLabel}>Total</Text>
+                  </View>
+                </View>
               </View>
-
-              <View style={styles.statsContainer}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>{listaUsuarios.length}</Text>
-                  <Text style={styles.statLabel}>Admins</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>{listaClientes.length}</Text>
-                  <Text style={styles.statLabel}>Clientes</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>{listaUsuarios.length + listaClientes.length}</Text>
-                  <Text style={styles.statLabel}>Total</Text>
-                </View>
-              </View>
-            </View>
+            )}
           </View>
         </LinearGradient>
 
@@ -1507,11 +1592,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    ...shadow5,
   },
   // Contenedor para el contenido debajo del header
   content: {
@@ -1523,10 +1604,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
+  headerContentStack: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
   headerRight: {
     alignItems: 'flex-end',
     flex: 1,
     marginLeft: 12,
+  },
+  headerRightStack: {
+    alignItems: 'flex-start',
+    width: '100%',
+    marginLeft: 0,
+    gap: 10,
   },
   headerTitleContainer: {
     flexDirection: 'row',
@@ -1543,9 +1635,20 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginTop: 8,
   },
+  statsContainerMobile: {
+    marginTop: 10,
+    gap: 14,
+    alignItems: 'flex-start',
+  },
+  statsContainerStack: {
+    marginTop: 4,
+  },
   statItem: {
     alignItems: 'center',
     marginLeft: 15,
+  },
+  statItemMobile: {
+    marginLeft: 0,
   },
   statNumber: {
     fontSize: 18,
@@ -1574,11 +1677,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 15,
     paddingVertical: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    ...shadow2,
   },
   searchIcon: {
     marginRight: 10,
@@ -1594,11 +1693,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 12,
     padding: 5,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    ...shadow2,
   },
   tab: {
     flex: 1,
@@ -1625,6 +1720,16 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  headerActionsHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+    marginTop: 6,
+  },
+  headerActionButtonSpacing: {
+    marginLeft: 0,
   },
   headerAddButton: {
     flexDirection: 'row',
@@ -1676,11 +1781,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 14,
     padding: 20,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    ...shadow6,
   },
   confirmTitle: {
     fontSize: 18,
@@ -1725,11 +1826,7 @@ const styles = StyleSheet.create({
   formGradient: {
     borderRadius: 15,
     padding: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
+    ...shadow3,
   },
   formTitle: {
     fontSize: 18,
@@ -1863,11 +1960,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: 18,
     overflow: 'hidden',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    ...shadow6,
   },
   editModalHeader: {
     flexDirection: 'row',
@@ -1998,17 +2091,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 15,
     overflow: 'hidden',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    ...shadow3,
     borderWidth: 2,
     borderColor: 'transparent',
   },
   userGridCardSelected: {
     borderColor: colors.secondary,
-    elevation: 5,
+    ...shadow5,
   },
   userGridCardInactive: {
     opacity: 0.7,
@@ -2125,11 +2214,7 @@ const styles = StyleSheet.create({
     padding: 40,
     backgroundColor: colors.card,
     borderRadius: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    ...shadow2,
     marginTop: 20,
   },
   emptyGridText: {
@@ -2154,11 +2239,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 15,
     marginBottom: 20,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    ...shadow5,
     overflow: 'hidden',
   },
   editFormHeader: {
@@ -2210,11 +2291,7 @@ const styles = StyleSheet.create({
     right: 20,
     bottom: 20,
     borderRadius: 30,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    ...shadow5,
   },
   fabGradient: {
     width: 60,

@@ -16,7 +16,8 @@ const CustomDrawerContent: React.FC<Props> = (props) => {
     const auth = getAuth();
     try {
       await signOut(auth);
-      navigation.navigate('Login'); // Redirigir a la pantalla de inicio de sesión
+      // Tras cerrar sesión, la app redirige automáticamente por onAuthStateChanged.
+      // Evitamos navegar desde el Drawer para no generar el warning en web.
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     }
@@ -55,6 +56,13 @@ const CustomDrawerContent: React.FC<Props> = (props) => {
         />
       )}
 
+      {userType !== 'admin' && (
+        <DrawerItem
+          label="Facturas"
+          onPress={() => navigation.navigate('UserInvoices')}
+        />
+      )}
+
       {/* Opciones adicionales solo para administradores */}
       {userType === 'admin' && (
         <>
@@ -78,6 +86,10 @@ const CustomDrawerContent: React.FC<Props> = (props) => {
           <DrawerItem
             label="Inventario"
             onPress={() => navigation.navigate('Inventory')}
+          />
+          <DrawerItem
+            label="Facturas"
+            onPress={() => navigation.navigate('Invoices')}
           />
       
           <DrawerItem

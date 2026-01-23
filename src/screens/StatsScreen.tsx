@@ -22,7 +22,7 @@ import { colors } from '../styles/globalStyles';
 import { getBcvUsdRate } from '../utils/getBcvRate';
 
 // Definición de interfaces
-type FinancialState = 'por_cobrar' | 'cobrado' | 'pagado' | 'cancelado';
+type FinancialState = 'por_cobrar' | 'por_confirmar_pago' | 'cobrado' | 'pagado' | 'cancelado';
 
 interface Order {
   id: string;
@@ -114,12 +114,14 @@ const StatsScreen = () => {
     avgPerClient: 0,
     financeTotals: {
       por_cobrar: 0,
+      por_confirmar_pago: 0,
       cobrado: 0,
       pagado: 0,
       cancelado: 0,
     },
     financeCounts: {
       por_cobrar: 0,
+      por_confirmar_pago: 0,
       cobrado: 0,
       pagado: 0,
       cancelado: 0,
@@ -370,12 +372,14 @@ const StatsScreen = () => {
 
     const financeTotals: Record<FinancialState, number> = {
       por_cobrar: 0,
+      por_confirmar_pago: 0,
       cobrado: 0,
       pagado: 0,
       cancelado: 0,
     };
     const financeCounts: Record<FinancialState, number> = {
       por_cobrar: 0,
+      por_confirmar_pago: 0,
       cobrado: 0,
       pagado: 0,
       cancelado: 0,
@@ -404,6 +408,10 @@ const StatsScreen = () => {
       switch (financialState) {
         case 'por_cobrar':
           financeTotals.por_cobrar += baseAmount;
+          pipelineRevenue += baseAmount;
+          break;
+        case 'por_confirmar_pago':
+          financeTotals.por_confirmar_pago += baseAmount;
           pipelineRevenue += baseAmount;
           break;
         case 'cobrado':
