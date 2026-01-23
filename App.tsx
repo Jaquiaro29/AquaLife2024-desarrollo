@@ -27,6 +27,7 @@ import CreateScreenUser from './src/screens/CreateScreenUser';
 
 // Drawer personalizado
 import CustomDrawerContent from './src/components/CustomDrawerContent';
+import InactivityProvider from './src/components/InactivityProvider';
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -139,27 +140,29 @@ const App = () => {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
-          // Si hay usuario logueado, ir directo al drawer (pasando userType como initialParams)
-          <Stack.Screen
-            name="MainDrawer"
-            component={MainDrawerNavigator}
-            options={{ headerShown: false }}
-            initialParams={{ userType }}
-          />
-        ) : (
-          // Usuario no autenticado: pantalla pública
-          <>
-            <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-          </>
-        )}
+    <InactivityProvider timeoutMs={30 * 60 * 1000}>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {user ? (
+            // Si hay usuario logueado, ir directo al drawer (pasando userType como initialParams)
+            <Stack.Screen
+              name="MainDrawer"
+              component={MainDrawerNavigator}
+              options={{ headerShown: false }}
+              initialParams={{ userType }}
+            />
+          ) : (
+            // Usuario no autenticado: pantalla pública
+            <>
+              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="Register" component={RegisterScreen} />
+            </>
+          )}
 
-      </Stack.Navigator>
-    </NavigationContainer>
+        </Stack.Navigator>
+      </NavigationContainer>
+    </InactivityProvider>
   );
 };
 
