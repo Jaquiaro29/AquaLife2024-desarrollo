@@ -39,6 +39,7 @@ import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../types/navigation';
 
 const { width } = Dimensions.get('window');
+const isSmallScreen = width < 520;
 
 const CLIENT_GRADIENT = colors.gradientPrimary;
 
@@ -1301,6 +1302,31 @@ const CreateUserScreen = () => {
 
   // Edit modal se define más abajo
 
+  const headerActionButtons = (
+    <>
+      <TouchableOpacity style={styles.headerAddButton} onPress={openCreateFromHeader}>
+        <FontAwesome5 name="user-plus" size={16} color={colors.textInverse} />
+        <Text style={styles.headerActionText}>Nuevo Usuario</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.headerEditButton, isSmallScreen && styles.headerActionButtonSpacing]}
+        onPress={handleEditFromHeader}
+      >
+        <FontAwesome5 name="edit" size={14} color={colors.textInverse} />
+        <Text style={styles.headerActionText}>Editar</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.headerDeleteButton, isSmallScreen && styles.headerActionButtonSpacing]}
+        onPress={() => handleDelete()}
+      >
+        <FontAwesome5 name="trash" size={14} color={colors.textInverse} />
+        <Text style={styles.headerActionText}>Eliminar</Text>
+      </TouchableOpacity>
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor={colors.secondaryDark} barStyle="light-content" />
@@ -1317,45 +1343,59 @@ const CreateUserScreen = () => {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         >
-          <View style={styles.headerContent}>
+          <View style={[styles.headerContent, isSmallScreen && styles.headerContentStack]}>
             <View style={styles.headerTitleContainer}>
               <FontAwesome5 name="users-cog" size={24} color={colors.textInverse} />
               <Text style={styles.headerTitle}>Gestión de Usuarios</Text>
             </View>
 
-            <View style={styles.headerRight}>
-              <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.headerAddButton} onPress={openCreateFromHeader}>
-                  <FontAwesome5 name="user-plus" size={16} color={colors.textInverse} />
-                  <Text style={styles.headerActionText}>Nuevo Usuario</Text>
-                </TouchableOpacity>
+            {isSmallScreen ? (
+              <>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.headerActionsHorizontal}
+                >
+                  {headerActionButtons}
+                </ScrollView>
 
-                <TouchableOpacity style={styles.headerEditButton} onPress={handleEditFromHeader}>
-                  <FontAwesome5 name="edit" size={14} color={colors.textInverse} />
-                  <Text style={styles.headerActionText}>Editar</Text>
-                </TouchableOpacity>
+                <View style={[styles.statsContainer, styles.statsContainerMobile]}>
+                  <View style={[styles.statItem, styles.statItemMobile]}>
+                    <Text style={styles.statNumber}>{listaUsuarios.length}</Text>
+                    <Text style={styles.statLabel}>Admins</Text>
+                  </View>
+                  <View style={[styles.statItem, styles.statItemMobile]}>
+                    <Text style={styles.statNumber}>{listaClientes.length}</Text>
+                    <Text style={styles.statLabel}>Clientes</Text>
+                  </View>
+                  <View style={[styles.statItem, styles.statItemMobile]}>
+                    <Text style={styles.statNumber}>{listaUsuarios.length + listaClientes.length}</Text>
+                    <Text style={styles.statLabel}>Total</Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View style={styles.headerRight}>
+                <View style={styles.headerActions}>
+                  {headerActionButtons}
+                </View>
 
-                <TouchableOpacity style={styles.headerDeleteButton} onPress={() => handleDelete()}>
-                  <FontAwesome5 name="trash" size={14} color={colors.textInverse} />
-                  <Text style={styles.headerActionText}>Eliminar</Text>
-                </TouchableOpacity>
+                <View style={styles.statsContainer}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNumber}>{listaUsuarios.length}</Text>
+                    <Text style={styles.statLabel}>Admins</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNumber}>{listaClientes.length}</Text>
+                    <Text style={styles.statLabel}>Clientes</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statNumber}>{listaUsuarios.length + listaClientes.length}</Text>
+                    <Text style={styles.statLabel}>Total</Text>
+                  </View>
+                </View>
               </View>
-
-              <View style={styles.statsContainer}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>{listaUsuarios.length}</Text>
-                  <Text style={styles.statLabel}>Admins</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>{listaClientes.length}</Text>
-                  <Text style={styles.statLabel}>Clientes</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statNumber}>{listaUsuarios.length + listaClientes.length}</Text>
-                  <Text style={styles.statLabel}>Total</Text>
-                </View>
-              </View>
-            </View>
+            )}
           </View>
         </LinearGradient>
 
@@ -1523,10 +1563,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
+  headerContentStack: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
   headerRight: {
     alignItems: 'flex-end',
     flex: 1,
     marginLeft: 12,
+  },
+  headerRightStack: {
+    alignItems: 'flex-start',
+    width: '100%',
+    marginLeft: 0,
+    gap: 10,
   },
   headerTitleContainer: {
     flexDirection: 'row',
@@ -1543,9 +1594,20 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginTop: 8,
   },
+  statsContainerMobile: {
+    marginTop: 10,
+    gap: 14,
+    alignItems: 'flex-start',
+  },
+  statsContainerStack: {
+    marginTop: 4,
+  },
   statItem: {
     alignItems: 'center',
     marginLeft: 15,
+  },
+  statItemMobile: {
+    marginLeft: 0,
   },
   statNumber: {
     fontSize: 18,
@@ -1625,6 +1687,16 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  headerActionsHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+    marginTop: 6,
+  },
+  headerActionButtonSpacing: {
+    marginLeft: 0,
   },
   headerAddButton: {
     flexDirection: 'row',

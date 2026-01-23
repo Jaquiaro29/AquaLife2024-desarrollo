@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -8,15 +8,18 @@ import {
   Alert,
   StyleSheet,
   Modal,
-  ActivityIndicator
+  ActivityIndicator,
+  Image,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { db, auth } from "../../firebaseConfig";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc, onSnapshot } from "firebase/firestore";
 import { formatCurrency } from '../utils/currency';
 import { getBcvUsdRate } from '../utils/getBcvRate';
 import { useGlobalConfig } from '../hooks/useGlobalConfig';
 import { getNextOrderNumber } from "../components/getNextOrderNumber";
 import { colors } from '../styles/globalStyles';
+import { VE_BANKS } from '../utils/veBanks';
 
 // Definimos la interfaz del pedido
 interface Order {
@@ -42,6 +45,13 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   // costPerBottle will be derived from global config (botellon price) and priority
   const [loading, setLoading] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [showPaymentDetails, setShowPaymentDetails] = useState(false);
+  const [paymentConfig, setPaymentConfig] = useState<any | null>(null);
+  const [refLast6, setRefLast6] = useState<string>("");
+  const [payerBank, setPayerBank] = useState<string>("");
+  const [payAmount, setPayAmount] = useState<string>("");
+  const [isCustomBank, setIsCustomBank] = useState(false);
+  const [customBank, setCustomBank] = useState('');
 
   // Efecto para establecer fecha actual
   useEffect(() => {
@@ -49,6 +59,46 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     const dateStr = now.toLocaleDateString('es-ES');
     setTodayDate(dateStr);
   }, []);
+
+  // Escucha métodos de pago (solo lectura para mostrar en el modal)
+  useEffect(() => {
+    const ref = doc(db, 'configuracion', 'metodosPago');
+    const unsub = onSnapshot(ref, (snap) => {
+      setPaymentConfig(snap.exists() ? snap.data() : null);
+    });
+    return () => unsub();
+  }, []);
+
+  const configuredBanks = useMemo(() => {
+    const banks: { label: string; code?: string }[] = [];
+    if (paymentConfig?.pagoMovil?.banco) {
+      banks.push({ label: paymentConfig.pagoMovil.banco, code: paymentConfig.pagoMovil.bancoCodigo });
+    }
+    if (paymentConfig?.cuenta?.banco) {
+      banks.push({ label: paymentConfig.cuenta.banco, code: paymentConfig.cuenta.bancoCodigo });
+    }
+    return banks;
+  }, [paymentConfig]);
+
+  // Lista completa disponible en el selector (config + catálogo VE)
+  const availableBanks = useMemo(() => {
+    const map = new Map<string, { label: string; code?: string }>();
+    for (const b of VE_BANKS) {
+      map.set(b.name, { label: b.name, code: b.code });
+    }
+    for (const b of configuredBanks) {
+      map.set(b.label, { label: b.label, code: b.code });
+    }
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [configuredBanks]);
+
+  // Prefijar banco sugerido desde la configuración
+  useEffect(() => {
+    if (!payerBank && configuredBanks.length > 0) {
+      setPayerBank(configuredBanks[0].label);
+      setIsCustomBank(false);
+    }
+  }, [configuredBanks, payerBank]);
 
   // Efecto para obtener tasa del dólar
   useEffect(() => {
@@ -125,12 +175,12 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   // Lógica de descripción del tipo de pedido
   const getTypeDescription = (type: Order["type"]) => {
     return type === "recarga"
-      ? "cambiamos y desinfectamos los botellones; recibes botellones revisados y en óptimas condiciones. Recomendado si tus botellones requieren limpieza o mantenimiento." 
-      : "trae tus botellones vacíos y recíbelos llenos rápidamente. Ideal si solo necesitas reemplazar botellones vacíos por llenos.";
+      ? "Desinfectamos tus botellones; recibes botellones revisados y en óptimas condiciones. Recomendado si tus botellones requieren limpieza o mantenimiento." 
+      : "Cambia tus botellones vacíos y recíbelos llenos rápidamente. Ideal si solo necesitas reemplazar botellones vacíos por llenos.";
   };
 
   // Persistencia en Firestore
-  const handleCreateOrderInFirestore = async () => {
+  const handleCreateOrderInFirestore = async (opts?: { refLast6?: string; payerBank?: string; payLater?: boolean; payAmount?: string }) => {
     setLoading(true);
     try {
       const user = auth.currentUser;
@@ -147,7 +197,7 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       const hora = now.toTimeString().split(" ")[0];
       const numeroPedido = await getNextOrderNumber(db);
 
-      const nuevoPedido = {
+      const nuevoPedido: any = {
         clienteId: user.uid,
         fecha,
         hora,
@@ -163,12 +213,28 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         priority: order.priority,
         numeroPedido: numeroPedido,
         createdAt: serverTimestamp(),
+        estadoFinanciero: 'por_cobrar',
       };
+
+      if (opts?.refLast6) {
+        nuevoPedido.refPagoUlt6 = opts.refLast6;
+        nuevoPedido.estadoFinanciero = 'por_confirmar_pago';
+        nuevoPedido.fechaRefPago = serverTimestamp();
+      }
+      if (opts?.payerBank) nuevoPedido.bancoEmisor = opts.payerBank;
+      if (opts?.payAmount) {
+        const parsed = parseFloat(opts.payAmount);
+        if (!Number.isNaN(parsed)) {
+          nuevoPedido.montoPagado = parsed;
+        }
+      }
+      if (opts?.payLater) nuevoPedido.pagarLuego = true;
 
       await addDoc(collection(db, "Pedidos"), nuevoPedido);
 
       Alert.alert("✅ Éxito", "Tu pedido ha sido generado correctamente.");
       setShowSummary(false);
+      setShowPaymentDetails(false);
       setIsConfirmed(false);
       // Reset form
       setOrder({
@@ -439,7 +505,7 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               </TouchableOpacity>
               <TouchableOpacity 
                 style={styles.modalButtonConfirm}
-                onPress={handleCreateOrderInFirestore}
+                onPress={() => { setShowSummary(false); setPayAmount(''); setShowPaymentDetails(true); }}
                 disabled={loading}
               >
                 {loading ? (
@@ -448,6 +514,143 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   <Text style={styles.modalButtonTextConfirm}>
                     ✅ Confirmar y Pagar
                   </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Detalle de Pago */}
+      <Modal visible={showPaymentDetails} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>💳 Confirmación de Pago</Text>
+            <ScrollView style={styles.modalScroll} contentContainerStyle={{ paddingBottom: 12 }} showsVerticalScrollIndicator={false}>
+              {/* Métodos de pago (solo lectura) */}
+              {paymentConfig ? (
+                <View style={{ marginBottom: 16, gap: 10 }}>
+                  {paymentConfig.pagoMovil && (
+                    <TouchableOpacity
+                      style={[styles.readonlyBox, payerBank === paymentConfig.pagoMovil.banco && styles.readonlyBoxActive]}
+                      onPress={() => setPayerBank(paymentConfig.pagoMovil.banco)}
+                    >
+                      <Text style={styles.readonlyTitle}>Pago Móvil</Text>
+                      <Text style={styles.readonlyText}>Banco: {paymentConfig.pagoMovil.banco} ({paymentConfig.pagoMovil.bancoCodigo})</Text>
+                      <Text style={styles.readonlyText}>Teléfono: {paymentConfig.pagoMovil.telefono}</Text>
+                      <Text style={styles.readonlyText}>CI/RIF: {paymentConfig.pagoMovil.rif}</Text>
+                      {paymentConfig.pagoMovil.qrUrl ? (
+                        <Image
+                          source={{ uri: paymentConfig.pagoMovil.qrUrl }}
+                          style={styles.qrImage}
+                          resizeMode="contain"
+                        />
+                      ) : null}
+                    </TouchableOpacity>
+                  )}
+                  {paymentConfig.cuenta && (
+                    <TouchableOpacity
+                      style={[styles.readonlyBox, payerBank === paymentConfig.cuenta.banco && styles.readonlyBoxActive]}
+                      onPress={() => setPayerBank(paymentConfig.cuenta.banco)}
+                    >
+                      <Text style={styles.readonlyTitle}>Transferencia Bancaria</Text>
+                      <Text style={styles.readonlyText}>Banco: {paymentConfig.cuenta.banco} ({paymentConfig.cuenta.bancoCodigo})</Text>
+                      <Text style={styles.readonlyText}>Cuenta: {paymentConfig.cuenta.cuenta}</Text>
+                      <Text style={styles.readonlyText}>CI/RIF: {paymentConfig.cuenta.rif}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <Text style={{ marginBottom: 12, color: colors.textSecondary }}>Cargando métodos de pago...</Text>
+              )}
+
+              {/* Campos de referencia */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={styles.modalLabel}>Monto del pedido (referencia)</Text>
+                <Text style={[styles.modalValue, { marginBottom: 10 }]}>{formatCurrency(totalPrice)}</Text>
+                <Text style={styles.modalLabel}>Últimos 6 dígitos de la referencia</Text>
+                <TextInput
+                  style={styles.input}
+                  keyboardType="numeric"
+                  maxLength={6}
+                  placeholder="Ej: 123456"
+                  value={refLast6}
+                  onChangeText={(t) => setRefLast6(t.replace(/\D/g, ''))}
+                />
+                <Text style={[styles.modalLabel, { marginTop: 10 }]}>Banco emisor</Text>
+                <View style={styles.pickerWrapper}>
+                  <Picker
+                    selectedValue={isCustomBank ? '__other__' : payerBank}
+                    onValueChange={(val) => {
+                      if (String(val) === '__other__') {
+                        setIsCustomBank(true);
+                        setPayerBank(customBank);
+                      } else {
+                        setIsCustomBank(false);
+                        setCustomBank('');
+                        setPayerBank(String(val));
+                      }
+                    }}
+                    mode="dropdown"
+                    dropdownIconColor={colors.textSecondary}
+                    style={styles.picker}
+                  >
+                    {availableBanks.length === 0 && <Picker.Item label="Selecciona banco" value="" />}
+                    {availableBanks.map((bank) => (
+                      <Picker.Item
+                        key={`${bank.label}-${bank.code ?? 'nc'}`}
+                        label={`${bank.label}${bank.code ? ` (${bank.code})` : ''}`}
+                        value={bank.label}
+                      />
+                    ))}
+                    <Picker.Item label="Otro banco..." value="__other__" />
+                  </Picker>
+                </View>
+                {isCustomBank && (
+                  <TextInput
+                    style={styles.input}
+                    value={customBank}
+                    onChangeText={(t) => {
+                      setCustomBank(t);
+                      setPayerBank(t);
+                    }}
+                    placeholder="Nombre del banco"
+                  />
+                )}
+                <Text style={[styles.modalLabel, { marginTop: 10 }]}>Monto pagado</Text>
+                <TextInput
+                  style={styles.input}
+                  keyboardType="decimal-pad"
+                  value={payAmount}
+                  onChangeText={(t) => setPayAmount(t.replace(/[^0-9.,]/g, '').replace(',', '.'))}
+                  placeholder="Ej: 12.50"
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalButtonCancel}
+                onPress={() => { setShowPaymentDetails(false); setShowSummary(true); }}
+              >
+                <Text style={styles.modalButtonTextCancel}>Volver</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButtonCancel, { backgroundColor: colors.grayShades[100] }]}
+                onPress={() => handleCreateOrderInFirestore({ payLater: true })}
+                disabled={loading}
+              >
+                {loading ? <ActivityIndicator /> : <Text style={styles.modalButtonTextCancel}>Pagar luego</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalButtonConfirm}
+                onPress={() => handleCreateOrderInFirestore({ refLast6: refLast6.trim(), payerBank: payerBank.trim(), payAmount: payAmount.trim() })}
+                disabled={loading || refLast6.length !== 6 || payAmount.trim() === '' || Number.isNaN(parseFloat(payAmount))}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.textInverse} />
+                ) : (
+                  <Text style={styles.modalButtonTextConfirm}>Enviar referencia</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -727,6 +930,10 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 400,
+    maxHeight: '90%',
+  },
+  modalScroll: {
+    marginBottom: 12,
   },
   modalTitle: {
     fontSize: 24,
@@ -808,6 +1015,54 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  readonlyBox: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  readonlyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  readonlyText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  readonlyBoxActive: {
+    borderColor: colors.primary,
+    backgroundColor: '#eef6ff',
+  },
+  qrImage: {
+    width: '100%',
+    height: 160,
+    marginTop: 10,
+    borderRadius: 10,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
+    color: colors.textPrimary,
+    backgroundColor: colors.surface,
+  },
+  pickerWrapper: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 44,
+    color: colors.textPrimary,
   },
 });
 

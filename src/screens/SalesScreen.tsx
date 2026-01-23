@@ -46,6 +46,7 @@ interface ClienteDoc {
 type SearchMode = 'dia' | 'semana' | 'mes' | 'ano' | 'rango';
 
 const { width: screenWidth } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 520;
 
 const SalesScreen = () => {
   // --- Estados principales ---
@@ -319,14 +320,24 @@ const SalesScreen = () => {
       <View style={styles.container}>
         {/* Header */}
         <LinearGradient colors={colors.gradientSecondary} style={styles.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-          <View style={styles.headerContent}>
+          <View style={[styles.headerContent, isSmallScreen && styles.headerContentStack]}>
             <Text style={styles.headerTitle}>Panel de Ventas</Text>
             <Text style={styles.headerSubtitle}>Gestión y consulta de pedidos</Text>
+            {isSmallScreen && (
+              <View style={styles.headerActionsRow}>
+                <TouchableOpacity style={styles.filterButton} onPress={clearFilters}>
+                  <Icon name="filter-alt" size={20} color={colors.textInverse} />
+                  <Text style={styles.filterButtonText}>Limpiar</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-          <TouchableOpacity style={styles.filterButton} onPress={clearFilters}>
-            <Icon name="filter-alt" size={20} color={colors.textInverse} />
-            <Text style={styles.filterButtonText}>Limpiar</Text>
-          </TouchableOpacity>
+          {!isSmallScreen && (
+            <TouchableOpacity style={styles.filterButton} onPress={clearFilters}>
+              <Icon name="filter-alt" size={20} color={colors.textInverse} />
+              <Text style={styles.filterButtonText}>Limpiar</Text>
+            </TouchableOpacity>
+          )}
         </LinearGradient>
 
         <ScrollView 
@@ -337,7 +348,7 @@ const SalesScreen = () => {
           {/* Filtros de cliente */}
           <View style={styles.filterSection}>
             <Text style={styles.sectionTitle}>Filtrar por Cliente</Text>
-            <View style={styles.inputRow}>
+            <View style={[styles.inputRow, isSmallScreen && styles.inputRowStack]}>
               <View style={styles.inputContainer}>
                 <Icon name="badge" size={20} color={colors.textSecondary} style={styles.inputIcon} />
                 <TextInput
@@ -447,7 +458,7 @@ const SalesScreen = () => {
                 </View>
               )}
               {searchMode === 'rango' && (
-                <View style={styles.rangeContainer}>
+                <View style={[styles.rangeContainer, isSmallScreen && styles.rangeContainerStack]}>
                   <View style={styles.inputContainer}>
                     <Icon name="arrow-forward" size={20} color={colors.textSecondary} style={styles.inputIcon} />
                     <TextInput
@@ -647,6 +658,11 @@ const styles = StyleSheet.create({
   headerContent: {
     flex: 1,
   },
+  headerContentStack: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -656,6 +672,10 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 14,
     color: colors.textInverse,
+  },
+  headerActionsRow: {
+    marginTop: 6,
+    width: '100%',
   },
   filterButton: {
     flexDirection: 'row',
@@ -698,6 +718,10 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  inputRowStack: {
+    flexDirection: 'column',
+    gap: 8,
   },
   inputContainer: {
     flex: 1,
@@ -752,6 +776,10 @@ const styles = StyleSheet.create({
   rangeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  rangeContainerStack: {
+    flexDirection: 'column',
+    gap: 8,
   },
   resultsSummary: {
     backgroundColor: colors.surface,

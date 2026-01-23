@@ -1,15 +1,43 @@
 import React, { useState, useEffect } from 'react'; 
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, Animated, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, Animated, Alert, Platform, Modal, Image, KeyboardAvoidingView } from 'react-native';
+import { NavigationProp, useNavigation } from '@react-navigation/native';
+import { Picker } from '@react-native-picker/picker';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { db, auth } from '../../firebaseConfig';
 import { collection, onSnapshot, query, where, getDocs, DocumentData, orderBy, limit, doc, getDoc, setDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { colors } from '../styles/globalStyles';
+import { RootStackParamList } from '../types/navigation';
 import { formatCurrency } from '../utils/currency';
 import { useGlobalConfig } from '../hooks/useGlobalConfig';
 
 const { width } = Dimensions.get('window');
+
+const bankOptions = [
+  { name: 'Banco de Venezuela', code: '0102' },
+  { name: 'Venezolano de Crédito', code: '0104' },
+  { name: 'Mercantil', code: '0105' },
+  { name: 'Provincial', code: '0108' },
+  { name: 'Bancaribe', code: '0114' },
+  { name: 'Banco Exterior', code: '0115' },
+  { name: 'BOD (Occidental de Descuento)', code: '0116' },
+  { name: 'Banco Caroní', code: '0128' },
+  { name: 'Banesco', code: '0134' },
+  { name: 'Sofitasa', code: '0137' },
+  { name: 'Banco Plaza', code: '0138' },
+  { name: 'BFC Banco Fondo Común', code: '0151' },
+  { name: '100% Banco', code: '0156' },
+  { name: 'Banco del Sur', code: '0157' },
+  { name: 'Banco del Tesoro', code: '0163' },
+  { name: 'Banco Activo', code: '0171' },
+  { name: 'Bancamiga', code: '0172' },
+  { name: 'Banplus', code: '0174' },
+  { name: 'Bicentenario', code: '0175' },
+  { name: 'Banfanb', code: '0177' },
+  { name: 'Banco Nacional de Crédito (BNC)', code: '0191' },
+  { name: 'Citibank', code: '0190' },
+];
 
 // Componente de gráfico simple (en una app real usarías una librería como react-native-chart-kit)
 type SimpleBarChartProps = {
@@ -46,6 +74,8 @@ const SimpleBarChart: React.FC<SimpleBarChartProps> = ({ data, labels, color = c
 };
 
 const DashboardScreen = () => {
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const isSmallScreen = width < 420;
   const [userCount, setUserCount] = useState(0);
   const [clientCount, setClientCount] = useState(0);
   const [userData, setUserData] = useState({
@@ -56,13 +86,14 @@ const DashboardScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(true);
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
-  const [monthlySales, setMonthlySales] = useState([12000, 15000, 18000, 22000, 19000, 25000]);
-  const [topProducts, setTopProducts] = useState([
-    { name: 'Botellón 20L', sales: 45 },
-    { name: 'Botellón 10L', sales: 32 },
-    { name: 'Botellón 5L', sales: 28 },
-    { name: 'Dispensador', sales: 15 }
-  ]);
+  const [recentActivityAll, setRecentActivityAll] = useState<Activity[]>([]);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [paymentHistory, setPaymentHistory] = useState<PaymentHistoryEntry[]>([]);
+  const [showPaymentHistoryModal, setShowPaymentHistoryModal] = useState(false);
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryEntry[]>([]);
+  const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false);
+  const [monthlySales, setMonthlySales] = useState<number[]>([]);
+  const [monthlyLabels, setMonthlyLabels] = useState<string[]>([]);
   // Usar hook global
   const { botellonPrice: priceFromConfig, botellonPriceHigh: priceHighFromConfig, loading: loadingConfig, updateBotellonPrice } = useGlobalConfig();
   const [botellonPrice, setBotellonPrice] = useState<number | null>(null);
@@ -86,17 +117,87 @@ const DashboardScreen = () => {
   }>({ total: null, orders: null, avgTicket: null, growthPct: null });
   const [financialTotals, setFinancialTotals] = useState<Record<FinancialState, number>>({
     por_cobrar: 0,
+    por_confirmar_pago: 0,
     cobrado: 0,
     pagado: 0,
     cancelado: 0,
   });
   const [financialCounts, setFinancialCounts] = useState<Record<FinancialState, number>>({
     por_cobrar: 0,
+    por_confirmar_pago: 0,
     cobrado: 0,
     pagado: 0,
     cancelado: 0,
   });
   const [netCashFlow, setNetCashFlow] = useState(0);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [activePaymentTab, setActivePaymentTab] = useState<'pagoMovil' | 'cuenta'>('pagoMovil');
+  const [pagoMovilForm, setPagoMovilForm] = useState<PaymentMobile>({ banco: '', bancoCodigo: '', telefono: '', rif: '', idType: 'V', qrUrl: '' });
+  const [cuentaForm, setCuentaForm] = useState<PaymentAccount>({ banco: '', bancoCodigo: '', cuenta: '', rif: '', idType: 'V' });
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [paymentMeta, setPaymentMeta] = useState<{ updatedAt?: Date; updatedBy?: string }>({});
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  const parseTimestampToDate = (ts: any): Date | undefined => {
+    if (!ts) return undefined;
+    if (typeof ts.toDate === 'function') return ts.toDate();
+    if (typeof ts.seconds === 'number') return new Date(ts.seconds * 1000);
+    const parsed = Date.parse(ts);
+    return isNaN(parsed) ? undefined : new Date(parsed);
+  };
+
+  useEffect(() => {
+    const ref = doc(db, 'configuracion', 'metodosPago');
+    const unsub = onSnapshot(ref, (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data() as any;
+      if (data.pagoMovil) {
+        setPagoMovilForm({
+          banco: data.pagoMovil.banco || '',
+          bancoCodigo: data.pagoMovil.bancoCodigo || '',
+          telefono: data.pagoMovil.telefono || '',
+          rif: data.pagoMovil.rif || '',
+          idType: data.pagoMovil.idType === 'J' ? 'J' : 'V',
+          qrUrl: data.pagoMovil.qrUrl || '',
+        });
+      }
+      if (data.cuenta) {
+        setCuentaForm({
+          banco: data.cuenta.banco || '',
+          bancoCodigo: data.cuenta.bancoCodigo || '',
+          cuenta: data.cuenta.cuenta || '',
+          rif: data.cuenta.rif || '',
+          idType: data.cuenta.idType === 'J' ? 'J' : 'V',
+        });
+      }
+      setPaymentMeta({
+        updatedAt: parseTimestampToDate(data.updatedAt),
+        updatedBy: data.updatedBy,
+      });
+    });
+    return () => unsub();
+  }, []);
+
+  // Historial de métodos de pago
+  useEffect(() => {
+    const ref = collection(db, 'configuracion', 'metodosPago', 'history');
+    const q = query(ref, orderBy('updatedAt', 'desc'), limit(20));
+    const unsub = onSnapshot(q, (snap) => {
+      const items: PaymentHistoryEntry[] = snap.docs.map((docSnap) => {
+        const data: any = docSnap.data();
+        return {
+          id: docSnap.id,
+          updatedAt: parseTimestampToDate(data.updatedAt),
+          updatedBy: data.updatedBy,
+          target: data.target || (data.pagoMovil ? 'Pago Móvil' : data.cuenta ? 'Cuenta' : 'Métodos de pago'),
+          pagoMovil: data.pagoMovil,
+          cuenta: data.cuenta,
+        };
+      });
+      setPaymentHistory(items);
+    });
+    return () => unsub();
+  }, []);
 
   const showNotificationAlert = (title: string, message: string) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -106,16 +207,51 @@ const DashboardScreen = () => {
     }
   };
 
-  // Simular datos de actividad reciente
+  // Actividad reciente desde pedidos
   useEffect(() => {
-    const activities = [
-      { id: 1, type: 'new_order', message: 'Nuevo pedido #00125', time: 'Hace 5 min', user: 'Carlos Pérez' },
-      { id: 2, type: 'payment', message: 'Pago confirmado #00124', time: 'Hace 12 min', user: 'María González' },
-      { id: 3, type: 'delivery', message: 'Entrega completada #00123', time: 'Hace 25 min', user: 'Juan Rodríguez' },
-      { id: 4, type: 'new_client', message: 'Nuevo cliente registrado', time: 'Hace 1 hora', user: 'Ana Martínez' },
-      { id: 5, type: 'stock', message: 'Stock bajo: Botellón 20L', time: 'Hace 2 horas', user: 'Sistema' }
-    ];
-    setRecentActivity(activities);
+    const formatTimeAgo = (d?: Date) => {
+      if (!d) return 'Sin fecha';
+      const diffMs = Date.now() - d.getTime();
+      const minutes = Math.floor(diffMs / (1000 * 60));
+      if (minutes < 1) return 'Hace un momento';
+      if (minutes < 60) return `Hace ${minutes} min`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `Hace ${hours} h`;
+      const days = Math.floor(hours / 24);
+      return `Hace ${days} d`;
+    };
+
+    const toDate = (fecha?: string, created?: any) => {
+      const parsedTs = parseTimestampToDate(created);
+      if (parsedTs) return parsedTs;
+      if (!fecha) return undefined;
+      const parts = fecha.split('-');
+      if (parts.length !== 3) return undefined;
+      const [y, m, d] = parts.map((p) => Number(p));
+      const maybeDate = new Date(y, (m ?? 1) - 1, d ?? 1);
+      return Number.isNaN(maybeDate.getTime()) ? undefined : maybeDate;
+    };
+
+    const q = query(collection(db, 'Pedidos'), orderBy('numeroPedido', 'desc'), limit(30));
+    const unsub = onSnapshot(q, (snap) => {
+      const items: Activity[] = snap.docs.map((docSnap) => {
+        const data: any = docSnap.data();
+        const when = toDate(data.fecha, data.createdAt);
+        return {
+          id: docSnap.id,
+          type: 'new_order',
+          message: `Pedido #${formatOrderNumber(data.numeroPedido)}`,
+          time: formatTimeAgo(when),
+          user: data.cliente || data.nombreCliente || 'Cliente',
+          status: data.estado,
+          total: data.total,
+        };
+      });
+      setRecentActivity(items.slice(0, 6));
+      setRecentActivityAll(items);
+    });
+
+    return () => unsub();
   }, []);
 
   // Cargar precio global de botellones desde Firestore
@@ -153,12 +289,14 @@ const DashboardScreen = () => {
 
       const totals: Record<FinancialState, number> = {
         por_cobrar: 0,
+        por_confirmar_pago: 0,
         cobrado: 0,
         pagado: 0,
         cancelado: 0,
       };
       const counts: Record<FinancialState, number> = {
         por_cobrar: 0,
+        por_confirmar_pago: 0,
         cobrado: 0,
         pagado: 0,
         cancelado: 0,
@@ -172,7 +310,13 @@ const DashboardScreen = () => {
         const estadoFinDb = (data.estadoFinanciero ?? undefined) as FinancialState | undefined;
         let estadoFin: FinancialState = 'por_cobrar';
 
-        if (estadoFinDb === 'por_cobrar' || estadoFinDb === 'cobrado' || estadoFinDb === 'pagado' || estadoFinDb === 'cancelado') {
+        if (
+          estadoFinDb === 'por_cobrar' ||
+          estadoFinDb === 'por_confirmar_pago' ||
+          estadoFinDb === 'cobrado' ||
+          estadoFinDb === 'pagado' ||
+          estadoFinDb === 'cancelado'
+        ) {
           estadoFin = estadoFinDb;
         }
 
@@ -185,6 +329,9 @@ const DashboardScreen = () => {
         switch (estadoFin) {
           case 'por_cobrar':
             totals.por_cobrar += baseAmount;
+            break;
+          case 'por_confirmar_pago':
+            totals.por_confirmar_pago += baseAmount;
             break;
           case 'cobrado':
             totals.cobrado += montoCobrado;
@@ -316,11 +463,19 @@ const DashboardScreen = () => {
       let countCur = 0;
       let totalPrev = 0;
       let countPrev = 0;
+      const totalsByMonth: Record<string, number> = {};
+      const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
       snapshot.docs.forEach((docSnap) => {
         const data = docSnap.data() as { total?: number; fecha?: string };
         const ts = parseFecha(data.fecha);
         if (isNaN(ts)) return;
+
+        // Acumulados por mes (clave YYYY-MM) para el gráfico
+        const dateObj = new Date(ts);
+        const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+        totalsByMonth[monthKey] = (totalsByMonth[monthKey] ?? 0) + (data.total ?? 0);
+
         if (ts >= currentMonthStart) {
           totalCur += data.total ?? 0;
           countCur += 1;
@@ -339,6 +494,19 @@ const DashboardScreen = () => {
         avgTicket,
         growthPct,
       });
+
+      // Últimos 6 meses (incluye mes actual)
+      const monthsWindow = 6;
+      const chartLabels: string[] = [];
+      const chartValues: number[] = [];
+      for (let i = monthsWindow - 1; i >= 0; i -= 1) {
+        const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}`;
+        chartLabels.push(monthNames[monthDate.getMonth()]);
+        chartValues.push(totalsByMonth[key] ?? 0);
+      }
+      setMonthlyLabels(chartLabels);
+      setMonthlySales(chartValues);
     });
 
     return () => unsub();
@@ -494,6 +662,120 @@ const DashboardScreen = () => {
     }
   };
 
+  // Historial de precios de botellón
+  useEffect(() => {
+    const ref = collection(db, 'config', 'botellon', 'history');
+    const q = query(ref, orderBy('updatedAt', 'desc'), limit(20));
+    const unsub = onSnapshot(q, (snap) => {
+      const items: PriceHistoryEntry[] = snap.docs.map((docSnap) => {
+        const data: any = docSnap.data();
+        return {
+          id: docSnap.id,
+          updatedAt: parseTimestampToDate(data.updatedAt),
+          user: data.user,
+          price: data.price,
+          priceHigh: data.priceHigh,
+        };
+      });
+      setPriceHistory(items);
+    });
+    return () => unsub();
+  }, []);
+
+  const bankLabel = (name?: string, code?: string) => {
+    if (!name) return 'No definido';
+    return `${name}${code ? ` (${code})` : ''}`;
+  };
+
+  const formatId = (idType: 'V' | 'J', rif: string) => {
+    const trimmed = rif.replace(/\s+/g, '');
+    return `${idType}-${trimmed || 'N/D'}`;
+  };
+
+  const formatDateTime = (d?: Date) => {
+    if (!d) return 'Sin registrar';
+    try {
+      return new Intl.DateTimeFormat('es-VE', { dateStyle: 'medium', timeStyle: 'short' }).format(d);
+    } catch {
+      return d.toLocaleString();
+    }
+  };
+
+  const handleSavePaymentMethods = async (target: 'pagoMovil' | 'cuenta') => {
+    setPaymentError(null);
+    const cleanPhone = pagoMovilForm.telefono.replace(/\D/g, '');
+    const rifPmDigits = pagoMovilForm.rif.replace(/\D/g, '');
+    const rifCtaDigits = cuentaForm.rif.replace(/\D/g, '');
+    const cleanAccount = cuentaForm.cuenta.replace(/\D/g, '');
+
+    const rifRegex = /^(V|J)-?\d{6,10}$/;
+    const errors: string[] = [];
+    const updatePayload: any = {};
+
+    if (target === 'pagoMovil') {
+      if (!pagoMovilForm.banco) errors.push('Selecciona banco para Pago Móvil');
+      if (cleanPhone.length < 10) errors.push('Teléfono Pago Móvil debe tener al menos 10 dígitos');
+      if (!rifRegex.test(`${pagoMovilForm.idType}-${rifPmDigits}`)) errors.push('CI/RIF Pago Móvil inválido (V-12345678 o J-123456789)');
+      if (!errors.length) {
+        updatePayload.pagoMovil = {
+          ...pagoMovilForm,
+          telefono: cleanPhone,
+          rif: `${pagoMovilForm.idType}-${rifPmDigits}`,
+        };
+      }
+    }
+
+    if (target === 'cuenta') {
+      if (!cuentaForm.banco) errors.push('Selecciona banco para la cuenta');
+      if (cleanAccount.length < 20) errors.push('La cuenta debe tener 20 dígitos');
+      if (!rifRegex.test(`${cuentaForm.idType}-${rifCtaDigits}`)) errors.push('CI/RIF de la cuenta inválido (V-12345678 o J-123456789)');
+      if (!errors.length) {
+        updatePayload.cuenta = {
+          ...cuentaForm,
+          cuenta: cleanAccount,
+          rif: `${cuentaForm.idType}-${rifCtaDigits}`,
+        };
+      }
+    }
+
+    if (errors.length) {
+      const message = errors.join('\n• ');
+      setPaymentError(errors.join('\n'));
+      Alert.alert('Faltan datos', `• ${message}`);
+      return;
+    }
+
+    try {
+      setSavingPayment(true);
+      const user = auth.currentUser;
+      const updatedBy = user?.email || userData.correo || userData.nombre || 'Desconocido';
+      await setDoc(
+        doc(db, 'configuracion', 'metodosPago'),
+        {
+          ...updatePayload,
+          updatedAt: serverTimestamp(),
+          updatedBy,
+        },
+        { merge: true }
+      );
+      await addDoc(collection(db, 'configuracion', 'metodosPago', 'history'), {
+        ...updatePayload,
+        target,
+        updatedAt: serverTimestamp(),
+        updatedBy,
+      });
+      setPaymentError(null);
+      Alert.alert('Guardado', 'Métodos de pago actualizados.');
+      setShowPaymentModal(false);
+    } catch (error) {
+      console.error('Error guardando métodos de pago', error);
+      setPaymentError('No se pudo guardar. Revisa conexión o permisos.');
+      Alert.alert('Error', 'No se pudo guardar. Intenta nuevamente.');
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
   const chargedOrders = financialCounts.cobrado + financialCounts.pagado;
   const weeklyGrowthLabel = weeklyGrowthPct !== null
     ? `${weeklyGrowthPct >= 0 ? '+' : ''}${weeklyGrowthPct.toFixed(1)}% vs semana previa`
@@ -545,9 +827,6 @@ const DashboardScreen = () => {
                   </View>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton}>
-                <FontAwesome5 name="cog" size={20} color={colors.textInverse} />
-              </TouchableOpacity>
             </View>
           </View>
           {showNotifications && (
@@ -566,14 +845,22 @@ const DashboardScreen = () => {
                 {!loadingNotifications && pendingOrders.length === 0 && (
                   <Text style={styles.notificationTextDark}>No hay pedidos pendientes</Text>
                 )}
-                {!loadingNotifications && pendingOrders.length > 0 && pendingOrders.slice(0, 5).map((order) => (
-                  <View key={order.id} style={styles.notificationItem}>
-                    <Text style={styles.notificationItemTitle}>#{formatOrderNumber(order.numeroPedido)}</Text>
-                    <Text style={styles.notificationItemSubtitle}>{order.estado ?? 'pendiente'} • {order.fecha ?? 'sin fecha'}</Text>
-                  </View>
-                ))}
-                {!loadingNotifications && pendingOrders.length > 5 && (
-                  <Text style={styles.notificationTextDark}>...y {pendingOrders.length - 5} más</Text>
+                {!loadingNotifications && pendingOrders.length > 0 && (
+                  <ScrollView style={styles.notificationList} contentContainerStyle={styles.notificationListContent}>
+                    {pendingOrders.map((order) => (
+                      <TouchableOpacity
+                        key={order.id}
+                        style={styles.notificationItem}
+                        onPress={() => {
+                          setShowNotifications(false);
+                          navigation.navigate('OrdersA');
+                        }}
+                      >
+                        <Text style={styles.notificationItemTitle}>#{formatOrderNumber(order.numeroPedido)}</Text>
+                        <Text style={styles.notificationItemSubtitle}>{order.estado ?? 'pendiente'} • {order.fecha ?? 'sin fecha'}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 )}
               </TouchableOpacity>
             </TouchableOpacity>
@@ -592,7 +879,7 @@ const DashboardScreen = () => {
           <View style={styles.cardsContainer}>
             <LinearGradient
                 colors={colors.gradientSuccess}
-                style={[styles.card, styles.cardElevated]}
+                style={[styles.card, styles.cardElevated, isSmallScreen && styles.cardFull]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
@@ -606,7 +893,7 @@ const DashboardScreen = () => {
 
             <LinearGradient
               colors={colors.gradientSecondary}
-              style={[styles.card, styles.cardElevated]}
+              style={[styles.card, styles.cardElevated, isSmallScreen && styles.cardFull]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
@@ -620,7 +907,7 @@ const DashboardScreen = () => {
 
             <LinearGradient
               colors={[colors.warning, '#D97706']}
-              style={[styles.card, styles.cardElevated]}
+              style={[styles.card, styles.cardElevated, isSmallScreen && styles.cardFull]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
@@ -636,7 +923,7 @@ const DashboardScreen = () => {
 
             <LinearGradient
               colors={[colors.error, '#DC2626']}
-              style={[styles.card, styles.cardElevated]}
+              style={[styles.card, styles.cardElevated, isSmallScreen && styles.cardFull]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
@@ -657,7 +944,7 @@ const DashboardScreen = () => {
           <View style={styles.cardsContainer}>
             <LinearGradient
               colors={[colors.primaryDark, colors.primary]}
-              style={[styles.card, styles.cardElevated]}
+              style={[styles.card, styles.cardElevated, isSmallScreen && styles.cardFull]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
@@ -671,7 +958,7 @@ const DashboardScreen = () => {
 
             <LinearGradient
               colors={colors.gradientSuccess}
-              style={[styles.card, styles.cardElevated]}
+              style={[styles.card, styles.cardElevated, isSmallScreen && styles.cardFull]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
@@ -685,7 +972,7 @@ const DashboardScreen = () => {
 
             <LinearGradient
               colors={[colors.secondaryDark, colors.secondary]}
-              style={[styles.card, styles.cardElevated]}
+              style={[styles.card, styles.cardElevated, isSmallScreen && styles.cardFull]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
@@ -699,7 +986,7 @@ const DashboardScreen = () => {
 
             <LinearGradient
               colors={['#4b5563', '#1f2937']}
-              style={[styles.card, styles.cardElevated]}
+              style={[styles.card, styles.cardElevated, isSmallScreen && styles.cardFull]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
@@ -714,7 +1001,7 @@ const DashboardScreen = () => {
 
           {/* Métricas Avanzadas */}
           <View style={styles.metricsRow}>
-            <View style={[styles.metricCard, styles.metricCardElevated]}>
+            <View style={[styles.metricCard, styles.metricCardElevated, isSmallScreen && styles.metricCardFull]}>
               <View style={styles.metricHeader}>
                 <FontAwesome5 name="balance-scale" size={18} color={netCashFlow >= 0 ? colors.success : colors.error} />
                 <Text style={styles.metricTitle}>Flujo Neto</Text>
@@ -725,7 +1012,7 @@ const DashboardScreen = () => {
               </Text>
             </View>
 
-            <View style={[styles.metricCard, styles.metricCardElevated]}>
+            <View style={[styles.metricCard, styles.metricCardElevated, isSmallScreen && styles.metricCardFull]}>
               <View style={styles.metricHeader}>
                 <FontAwesome5 name="clock" size={18} color="#2196F3" />
                 <Text style={styles.metricTitle}>Tiempo Respuesta</Text>
@@ -754,8 +1041,8 @@ const DashboardScreen = () => {
               <Text style={styles.sectionTitle}>Ventas Mensuales</Text>
             </View>
             <SimpleBarChart 
-              data={monthlySales} 
-              labels={['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun']}
+              data={monthlySales}
+              labels={monthlyLabels}
               color="#2196F3"
             />
             <View style={styles.chartStats}>
@@ -786,37 +1073,11 @@ const DashboardScreen = () => {
             </View>
           </View>
 
-          {/* Productos Más Vendidos */}
-          <View style={[styles.productsSection, styles.sectionElevated]}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Productos Más Vendidos</Text>
-              <TouchableOpacity>
-                <Text style={styles.viewAllText}>Ver Todos</Text>
-              </TouchableOpacity>
-            </View>
-            {topProducts.map((product, index) => (
-              <View key={index} style={styles.productItem}>
-                <View style={styles.productInfo}>
-                  <View style={[styles.productIcon, { backgroundColor: ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0'][index] }]}>
-                    <FontAwesome5 name="wine-bottle" size={16} color="#fff" />
-                  </View>
-                  <View>
-                    <Text style={styles.productName}>{product.name}</Text>
-                    <Text style={styles.productSales}>{product.sales} ventas este mes</Text>
-                  </View>
-                </View>
-                <View style={styles.productBadge}>
-                  <Text style={styles.productRank}>#{index + 1}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-
           {/* Actividad Reciente */}
           <View style={[styles.activitySection, styles.sectionElevated]}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Actividad Reciente</Text>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowActivityModal(true)}>
                 <Text style={styles.viewAllText}>Ver Todo</Text>
               </TouchableOpacity>
             </View>
@@ -889,6 +1150,11 @@ const DashboardScreen = () => {
               <View style={styles.infoHeader}>
                 <FontAwesome5 name="dollar-sign" size={20} color="#4CAF50" />
                 <Text style={styles.infoTitle}>Precio Global Botellón</Text>
+              </View>
+              <View style={styles.historyActionsRow}>
+                <TouchableOpacity onPress={() => setShowPriceHistoryModal(true)}>
+                  <Text style={styles.auditToggleText}>Ver historial</Text>
+                </TouchableOpacity>
               </View>
               <View style={styles.infoContent}>
                 <View style={styles.infoRow}>
@@ -982,6 +1248,41 @@ const DashboardScreen = () => {
             </View>
           </View>
 
+          {/* Métodos de pago */}
+          <View style={[styles.infoBox, styles.infoBoxElevated]}>
+            <View style={styles.infoHeader}>
+              <FontAwesome5 name="credit-card" size={20} color={colors.secondary} />
+              <Text style={styles.infoTitle}>Métodos de Pago</Text>
+            </View>
+
+            <View style={[styles.paymentSummaryRow, isSmallScreen && styles.paymentSummaryColumn]}>
+              <View style={styles.paymentChip}>
+                <Text style={styles.paymentChipTitle}>Pago Móvil</Text>
+                <Text style={styles.paymentChipText}>{bankLabel(pagoMovilForm.banco, pagoMovilForm.bancoCodigo)}</Text>
+                <Text style={styles.paymentChipSub}>Tel: {pagoMovilForm.telefono || 'No definido'}</Text>
+                <Text style={styles.paymentChipSub}>CI/RIF: {pagoMovilForm.rif ? formatId(pagoMovilForm.idType, pagoMovilForm.rif) : 'No definido'}</Text>
+                {pagoMovilForm.qrUrl ? (
+                  <Image source={{ uri: pagoMovilForm.qrUrl }} style={styles.qrPreviewImage} resizeMode="contain" />
+                ) : null}
+              </View>
+              <View style={styles.paymentChip}>
+                <Text style={styles.paymentChipTitle}>Cuenta Bancaria</Text>
+                <Text style={styles.paymentChipText}>{bankLabel(cuentaForm.banco, cuentaForm.bancoCodigo)}</Text>
+                <Text style={styles.paymentChipSub}>Cuenta: {cuentaForm.cuenta ? `${cuentaForm.cuenta.slice(0,4)}****${cuentaForm.cuenta.slice(-4)}` : 'No definida'}</Text>
+                <Text style={styles.paymentChipSub}>CI/RIF: {cuentaForm.rif ? formatId(cuentaForm.idType, cuentaForm.rif) : 'No definido'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.paymentActionsRow}>
+              <TouchableOpacity style={[styles.button, styles.paymentButton]} onPress={() => setShowPaymentModal(true)}>
+                <Text style={styles.buttonText}>Modificar métodos de pago</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowPaymentHistoryModal(true)}>
+                <Text style={styles.auditToggleText}>Ver historial</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Botón para mostrar/ocultar el cambio de contraseña */}
           <TouchableOpacity 
             onPress={() => setShowPassword(!showPassword)} 
@@ -1043,11 +1344,357 @@ const DashboardScreen = () => {
           <View style={styles.bottomSpacing} />
         </View>
       </ScrollView>
+
+      {/* Modal Métodos de Pago */}
+      <Modal
+        visible={showPaymentModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowPaymentModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={80}
+        >
+          <View style={styles.modalContent}>
+            <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>Modificar métodos de pago</Text>
+                  <Text style={styles.modalSubtitle}>Actualiza Pago Móvil o cuenta bancaria</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowPaymentModal(false)}>
+                  <FontAwesome5 name="times" size={18} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.tabRow}>
+                <TouchableOpacity
+                  style={[styles.tabButton, activePaymentTab === 'pagoMovil' && styles.tabButtonActive]}
+                  onPress={() => setActivePaymentTab('pagoMovil')}
+                >
+                  <Text style={[styles.tabButtonText, activePaymentTab === 'pagoMovil' && styles.tabButtonTextActive]}>Pago Móvil</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tabButton, activePaymentTab === 'cuenta' && styles.tabButtonActive]}
+                  onPress={() => setActivePaymentTab('cuenta')}
+                >
+                  <Text style={[styles.tabButtonText, activePaymentTab === 'cuenta' && styles.tabButtonTextActive]}>Cuenta Bancaria</Text>
+                </TouchableOpacity>
+              </View>
+
+              {activePaymentTab === 'pagoMovil' ? (
+                <View style={styles.formSection}>
+                  <Text style={styles.formLabel}>Banco</Text>
+                  <View style={styles.pickerWrapper}>
+                    <Picker
+                      selectedValue={pagoMovilForm.bancoCodigo}
+                      onValueChange={(code) => {
+                        const opt = bankOptions.find((b) => b.code === code);
+                        setPagoMovilForm((prev) => ({ ...prev, bancoCodigo: code, banco: opt?.name || '' }));
+                      }}
+                      dropdownIconColor={colors.textPrimary}
+                      style={styles.picker}
+                    >
+                      <Picker.Item label="Selecciona un banco" value="" />
+                      {bankOptions.map((b) => (
+                        <Picker.Item key={b.code} label={`${b.name} (${b.code})`} value={b.code} />
+                      ))}
+                    </Picker>
+                  </View>
+
+                  <Text style={styles.formLabel}>Teléfono</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Teléfono (solo números)"
+                    placeholderTextColor="#9E9E9E"
+                    keyboardType="phone-pad"
+                    value={pagoMovilForm.telefono}
+                    onChangeText={(t) => {
+                      const digits = t.replace(/\D/g, '');
+                      setPagoMovilForm((prev) => ({ ...prev, telefono: digits }));
+                    }}
+                  />
+
+                  <Text style={styles.formLabel}>C.I. o RIF</Text>
+                  <View style={styles.inlineIdRow}>
+                    <View style={styles.inlineIdSelector}>
+                      {([
+                        { key: 'V', label: 'V', sub: 'Venezolano' },
+                        { key: 'J', label: 'J', sub: 'Jurídico/Comercio' },
+                      ] as const).map((opt) => (
+                        <TouchableOpacity
+                          key={opt.key}
+                          style={[styles.inlinePill, pagoMovilForm.idType === opt.key && styles.inlinePillActive]}
+                          onPress={() => setPagoMovilForm((prev) => ({ ...prev, idType: opt.key }))}
+                        >
+                          <Text style={[styles.inlinePillLabel, pagoMovilForm.idType === opt.key && styles.inlinePillLabelActive]}>{opt.label}</Text>
+                          <Text style={[styles.inlinePillSub, pagoMovilForm.idType === opt.key && styles.inlinePillSubActive]}>{opt.sub}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <TextInput
+                      style={[styles.input, styles.inlineIdInput]}
+                      placeholder="12345678"
+                      placeholderTextColor="#9E9E9E"
+                      keyboardType="number-pad"
+                      value={pagoMovilForm.rif}
+                      onChangeText={(t) => {
+                        const digits = t.replace(/\D/g, '');
+                        setPagoMovilForm((prev) => ({ ...prev, rif: digits }));
+                      }}
+                    />
+                  </View>
+
+                  <Text style={styles.formLabel}>QR de Pago (URL)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="https://...imagen-qr.png (opcional)"
+                    placeholderTextColor="#9E9E9E"
+                    value={pagoMovilForm.qrUrl}
+                    onChangeText={(t) => setPagoMovilForm((prev) => ({ ...prev, qrUrl: t }))}
+                  />
+                  {pagoMovilForm.qrUrl ? (
+                    <View style={styles.qrPreviewBox}>
+                      <Image source={{ uri: pagoMovilForm.qrUrl }} style={styles.qrPreviewImage} resizeMode="contain" />
+                      <Text style={styles.qrPreviewText}>Se mostrará este QR al usuario.</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : (
+                <View style={styles.formSection}>
+                  <Text style={styles.formLabel}>Banco</Text>
+                  <View style={styles.pickerWrapper}>
+                    <Picker
+                      selectedValue={cuentaForm.bancoCodigo}
+                      onValueChange={(code) => {
+                        const opt = bankOptions.find((b) => b.code === code);
+                        setCuentaForm((prev) => ({ ...prev, bancoCodigo: code, banco: opt?.name || '' }));
+                      }}
+                      dropdownIconColor={colors.textPrimary}
+                      style={styles.picker}
+                    >
+                      <Picker.Item label="Selecciona un banco" value="" />
+                      {bankOptions.map((b) => (
+                        <Picker.Item key={b.code} label={`${b.name} (${b.code})`} value={b.code} />
+                      ))}
+                    </Picker>
+                  </View>
+
+                  <Text style={styles.formLabel}>Número de cuenta</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="20 dígitos"
+                    placeholderTextColor="#9E9E9E"
+                    keyboardType="number-pad"
+                    value={cuentaForm.cuenta}
+                    onChangeText={(t) => {
+                      const digits = t.replace(/\D/g, '');
+                      setCuentaForm((prev) => ({ ...prev, cuenta: digits }));
+                    }}
+                  />
+
+                  <Text style={styles.formLabel}>C.I. o RIF</Text>
+                  <View style={styles.inlineIdRow}>
+                    <View style={styles.inlineIdSelector}>
+                      {([
+                        { key: 'V', label: 'V', sub: 'Venezolano' },
+                        { key: 'J', label: 'J', sub: 'Jurídico/Comercio' },
+                      ] as const).map((opt) => (
+                        <TouchableOpacity
+                          key={opt.key}
+                          style={[styles.inlinePill, cuentaForm.idType === opt.key && styles.inlinePillActive]}
+                          onPress={() => setCuentaForm((prev) => ({ ...prev, idType: opt.key }))}
+                        >
+                          <Text style={[styles.inlinePillLabel, cuentaForm.idType === opt.key && styles.inlinePillLabelActive]}>{opt.label}</Text>
+                          <Text style={[styles.inlinePillSub, cuentaForm.idType === opt.key && styles.inlinePillSubActive]}>{opt.sub}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <TextInput
+                      style={[styles.input, styles.inlineIdInput]}
+                      placeholder="12345678"
+                      placeholderTextColor="#9E9E9E"
+                      keyboardType="number-pad"
+                      value={cuentaForm.rif}
+                      onChangeText={(t) => {
+                        const digits = t.replace(/\D/g, '');
+                        setCuentaForm((prev) => ({ ...prev, rif: digits }));
+                      }}
+                    />
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.modalButtonsRow}>
+                <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={() => setShowPaymentModal(false)}>
+                  <Text style={styles.buttonText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, styles.primaryButton, savingPayment && { opacity: 0.7 }]}
+                  onPress={() => handleSavePaymentMethods(activePaymentTab)}
+                  disabled={savingPayment}
+                >
+                  <Text style={styles.buttonText}>{savingPayment ? 'Guardando...' : 'Guardar métodos'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {paymentError ? (
+                <Text style={styles.errorText}>{paymentError}</Text>
+              ) : null}
+
+              <Text style={styles.modalHelper}>Se registra quién y cuándo modifica los métodos de pago.</Text>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal Actividad Reciente */}
+      <Modal
+        visible={showActivityModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowActivityModal(false)}
+      >
+        <View style={styles.activityModalOverlay}>
+          <View style={styles.activityModalContent}>
+            <View style={styles.activityModalHeader}>
+              <Text style={styles.activityModalTitle}>Actividad Reciente</Text>
+              <TouchableOpacity onPress={() => setShowActivityModal(false)}>
+                <FontAwesome5 name="times" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.activityModalList} contentContainerStyle={styles.activityModalListContent}>
+              {recentActivityAll.map((activity) => (
+                <View key={activity.id} style={styles.activityModalItem}>
+                  <View style={[styles.activityIcon, { backgroundColor: getActivityColor(activity.type) }]}>
+                    <FontAwesome5 name={getActivityIcon(activity.type)} size={14} color="#fff" />
+                  </View>
+                  <View style={styles.activityModalBody}>
+                    <Text style={styles.activityMessage}>{activity.message}</Text>
+                    <Text style={styles.activityMeta}>
+                      {activity.user} • {activity.time}
+                      {activity.status ? ` • ${activity.status}` : ''}
+                      {activity.total !== undefined ? ` • ${formatCurrency(activity.total)}` : ''}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Historial Métodos de Pago */}
+      <Modal
+        visible={showPaymentHistoryModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowPaymentHistoryModal(false)}
+      >
+        <View style={styles.activityModalOverlay}>
+          <View style={styles.activityModalContent}>
+            <View style={styles.activityModalHeader}>
+              <Text style={styles.activityModalTitle}>Historial Métodos de Pago</Text>
+              <TouchableOpacity onPress={() => setShowPaymentHistoryModal(false)}>
+                <FontAwesome5 name="times" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.activityModalList} contentContainerStyle={styles.activityModalListContent}>
+              {paymentHistory.length === 0 && (
+                <Text style={styles.activityMeta}>Sin registros aún.</Text>
+              )}
+              {paymentHistory.map((item) => (
+                <View key={item.id} style={styles.activityModalItem}>
+                  <View style={[styles.activityIcon, { backgroundColor: colors.secondary }]}>
+                    <FontAwesome5 name="credit-card" size={14} color="#fff" />
+                  </View>
+                  <View style={styles.activityModalBody}>
+                    <Text style={styles.activityMessage}>{item.target || 'Métodos de pago'}</Text>
+                    <Text style={styles.activityMeta}>
+                      {item.updatedBy || 'N/D'} • {formatDateTime(item.updatedAt)}
+                    </Text>
+                    {item.pagoMovil ? (
+                      <Text style={styles.activityMeta}>
+                        Pago Móvil: {bankLabel(item.pagoMovil.banco, item.pagoMovil.bancoCodigo)} • Tel {item.pagoMovil.telefono}
+                      </Text>
+                    ) : null}
+                    {item.cuenta ? (
+                      <Text style={styles.activityMeta}>
+                        Cuenta: {bankLabel(item.cuenta.banco, item.cuenta.bancoCodigo)} • {item.cuenta.cuenta}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Historial Precio Botellón */}
+      <Modal
+        visible={showPriceHistoryModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowPriceHistoryModal(false)}
+      >
+        <View style={styles.activityModalOverlay}>
+          <View style={styles.activityModalContent}>
+            <View style={styles.activityModalHeader}>
+              <Text style={styles.activityModalTitle}>Historial Precio Botellón</Text>
+              <TouchableOpacity onPress={() => setShowPriceHistoryModal(false)}>
+                <FontAwesome5 name="times" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.activityModalList} contentContainerStyle={styles.activityModalListContent}>
+              {priceHistory.length === 0 && (
+                <Text style={styles.activityMeta}>Sin registros aún.</Text>
+              )}
+              {priceHistory.map((item) => (
+                <View key={item.id} style={styles.activityModalItem}>
+                  <View style={[styles.activityIcon, { backgroundColor: colors.success }]}>
+                    <FontAwesome5 name="dollar-sign" size={14} color="#fff" />
+                  </View>
+                  <View style={styles.activityModalBody}>
+                    <Text style={styles.activityMessage}>Actualización de precio</Text>
+                    <Text style={styles.activityMeta}>
+                      {(item.user?.nombre || item.user?.email || 'N/D')} • {formatDateTime(item.updatedAt)}
+                    </Text>
+                    <Text style={styles.activityMeta}>
+                      {item.price !== undefined ? `Normal: ${formatCurrency(item.price)} ` : ''}
+                      {item.priceHigh !== undefined ? `| Alta prioridad: ${formatCurrency(item.priceHigh)}` : ''}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
 
-type FinancialState = 'por_cobrar' | 'cobrado' | 'pagado' | 'cancelado';
+type FinancialState = 'por_cobrar' | 'por_confirmar_pago' | 'cobrado' | 'pagado' | 'cancelado';
+
+type PaymentMobile = {
+  banco: string;
+  bancoCodigo: string;
+  telefono: string;
+  rif: string;
+  idType: 'V' | 'J';
+  qrUrl?: string;
+};
+
+type PaymentAccount = {
+  banco: string;
+  bancoCodigo: string;
+  cuenta: string;
+  rif: string;
+  idType: 'V' | 'J';
+};
 
 type Activity = {
   id: number | string;
@@ -1055,6 +1702,25 @@ type Activity = {
   message: string;
   time: string;
   user: string;
+  status?: string;
+  total?: number;
+};
+
+type PaymentHistoryEntry = {
+  id: string;
+  updatedAt?: Date;
+  updatedBy?: string;
+  target?: string;
+  pagoMovil?: any;
+  cuenta?: any;
+};
+
+type PriceHistoryEntry = {
+  id: string;
+  updatedAt?: Date;
+  user?: { uid?: string; nombre?: string; email?: string };
+  price?: number;
+  priceHigh?: number;
 };
 
 type PendingOrder = {
@@ -1164,8 +1830,8 @@ const styles = StyleSheet.create({
     right: 0,
     left: 0,
     bottom: 0,
-    paddingTop: 10,
-    paddingRight: 60, // deja libre la campana
+    paddingTop: 60, // baja el panel para no tapar el ícono
+    paddingRight: 72, // deja libre la campana
     paddingLeft: 10,
     alignItems: 'flex-end',
     zIndex: 10,
@@ -1173,14 +1839,16 @@ const styles = StyleSheet.create({
   notificationPanel: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
     elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12,
     shadowRadius: 6,
-    width: 260,
-    marginTop: 30,
+    width: 320,
+    minHeight: 160,
+    marginTop: 0,
+    maxHeight: '70%',
   },
   notificationTitle: {
     fontSize: 16,
@@ -1205,6 +1873,12 @@ const styles = StyleSheet.create({
   notificationItemSubtitle: {
     fontSize: 12,
     color: '#666',
+  },
+  notificationList: {
+    maxHeight: 320,
+  },
+  notificationListContent: {
+    paddingBottom: 6,
   },
   userInfo: {
     alignItems: 'flex-start',
@@ -1233,14 +1907,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: 12,
     marginBottom: 20,
   },
   card: {
-    width: (width - 50) / 2,
+    flexGrow: 1,
+    flexBasis: '48%',
+    maxWidth: 420,
+    minWidth: 260,
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 15,
+    padding: 18,
+    marginBottom: 12,
     alignItems: 'center',
+  },
+  cardFull: {
+    width: '100%',
   },
   cardElevated: {
     elevation: 5,
@@ -1275,14 +1956,22 @@ const styles = StyleSheet.create({
   },
   metricsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: 12,
     marginBottom: 20,
   },
   metricCard: {
-    width: (width - 50) / 2,
+    flexGrow: 1,
+    flexBasis: '48%',
+    maxWidth: 420,
+    minWidth: 260,
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 15,
+    padding: 14,
+  },
+  metricCardFull: {
+    width: '100%',
   },
   metricCardElevated: {
     elevation: 3,
@@ -1391,51 +2080,8 @@ const styles = StyleSheet.create({
   chartSection: {
     marginBottom: 20,
   },
-  productsSection: {
-    marginBottom: 20,
-  },
   activitySection: {
     marginBottom: 20,
-  },
-  productItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
-  },
-  productInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  productIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  productName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  productSales: {
-    fontSize: 12,
-    color: '#757575',
-  },
-  productBadge: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  productRank: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#333',
   },
   activityItem: {
     flexDirection: 'row',
@@ -1571,8 +2217,263 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  paymentSummaryRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  paymentSummaryColumn: {
+    flexDirection: 'column',
+  },
+  paymentChip: {
+    flex: 1,
+    backgroundColor: '#F7FBFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5F0FF',
+  },
+  paymentChipTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F1724',
+    marginBottom: 4,
+  },
+  paymentChipText: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '600',
+  },
+  paymentChipSub: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  paymentActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  paymentButton: {
+    flex: 1,
+  },
+  auditToggleText: {
+    marginLeft: 12,
+    color: '#2563eb',
+    fontWeight: '600',
+  },
+  historyActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 18,
+    width: '100%',
+    maxHeight: '85%',
+    ...Platform.select({ web: { maxWidth: 520, alignSelf: 'center' } }),
+  },
+  modalScroll: {
+    paddingBottom: 12,
+    gap: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#475569',
+    marginTop: 2,
+  },
+  tabRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 12,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  tabButtonActive: {
+    backgroundColor: '#E0F2FE',
+  },
+  tabButtonText: {
+    color: '#475569',
+    fontWeight: '600',
+  },
+  tabButtonTextActive: {
+    color: '#0ea5e9',
+  },
+  inlineIdRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  inlineIdSelector: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  inlineIdInput: {
+    flex: 1,
+  },
+  inlinePill: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    minWidth: 90,
+  },
+  inlinePillActive: {
+    backgroundColor: '#E0F2FE',
+    borderColor: '#38bdf8',
+  },
+  inlinePillLabel: {
+    color: '#0F172A',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  inlinePillLabelActive: {
+    color: '#0ea5e9',
+  },
+  inlinePillSub: {
+    color: '#475569',
+    fontSize: 11,
+  },
+  inlinePillSubActive: {
+    color: '#0ea5e9',
+  },
+  qrPreviewBox: {
+    marginTop: 6,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  qrPreviewImage: {
+    width: '100%',
+    height: 160,
+    marginBottom: 6,
+  },
+  qrPreviewText: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  formSection: {
+    gap: 10,
+    marginBottom: 12,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 4,
+  },
+  pickerWrapper: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    overflow: 'hidden',
+  },
+  picker: {
+    width: '100%',
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 6,
+  },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  primaryButton: {
+    flex: 1,
+    backgroundColor: '#0ea5e9',
+  },
+  modalHelper: {
+    marginTop: 10,
+    fontSize: 12,
+    color: '#475569',
+    textAlign: 'center',
+  },
+  errorText: {
+    marginTop: 8,
+    color: '#DC2626',
+    fontSize: 12,
+    textAlign: 'center',
+  },
   bottomSpacing: {
     height: 20,
+  },
+  activityModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  activityModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    width: '100%',
+    maxHeight: '80%',
+    ...Platform.select({ web: { maxWidth: 520, alignSelf: 'center' } }),
+  },
+  activityModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  activityModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  activityModalList: {
+    maxHeight: 480,
+  },
+  activityModalListContent: {
+    paddingBottom: 10,
+    gap: 10,
+  },
+  activityModalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F7',
+  },
+  activityModalBody: {
+    flex: 1,
   },
 });
 

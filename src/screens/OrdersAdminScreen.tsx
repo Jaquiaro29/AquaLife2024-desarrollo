@@ -35,23 +35,24 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useGlobalConfig } from '../hooks/useGlobalConfig';
 import { getNextOrderNumber } from '../components/getNextOrderNumber';
+import { VE_BANKS } from '../utils/veBanks';
 
 const { width, height } = Dimensions.get('window');
 
 // ===== Interfaces / tipos =====
-type EstadoFinanciero = 'por_cobrar' | 'cobrado' | 'pagado' | 'cancelado';
+type EstadoFinanciero = 'por_cobrar' | 'por_confirmar_pago' | 'cobrado' | 'pagado' | 'cancelado';
 
 interface Pedido {
   id: string;
   numeroPedido?: number;
   clienteId: string;
-  fecha: string;         
+  fecha: string;
   hora: string;
   cantidadConAsa: number;
   cantidadSinAsa: number;
   costoUnitario: number;
   total: number;
-  estado: string;         
+  estado: string;
   empleadoAsignadoId: string;
   observaciones: string;
   createdAt?: any;
@@ -61,6 +62,10 @@ interface Pedido {
   montoPagado?: number;
   fechaCobrado?: any;
   fechaPagado?: any;
+  refPagoUlt6?: string;
+  bancoEmisor?: string;
+  fechaRefPago?: any;
+  metodoPago?: string;
 }
 
 interface Cliente {
@@ -112,6 +117,20 @@ function formatFecha(fechaISO: string): string {
   return `${day}/${month}/${year}`;
 }
 
+// Formatea un timestamp (Firestore Date/ISO) a fecha y hora legible
+function formatTsDateTime(ts: any): string {
+  if (!ts) return 'N/D';
+  try {
+    const dateObj = ts.toDate ? ts.toDate() : new Date(ts);
+    if (isNaN(dateObj.getTime())) return 'N/D';
+    const fecha = dateObj.toISOString().split('T')[0];
+    const hora = dateObj.toTimeString().split(' ')[0];
+    return `${formatFecha(fecha)} · ${hora}`;
+  } catch (e) {
+    return 'N/D';
+  }
+}
+
 function getEstadoPriority(estado: string): number {
   switch (estado) {
     case 'pendiente': return 1;
@@ -130,6 +149,7 @@ function resolvePedidoFinancialState(pedido: Pedido): EstadoFinanciero {
 // ===== Componente principal =====
 const OrdersAdminScreen = () => {
   const navigation = useNavigation<any>();
+  const isSmallScreen = width < 520;
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [clientesMap, setClientesMap] = useState<Record<string, Cliente>>({});
   const [loading, setLoading] = useState<boolean>(true);
@@ -279,7 +299,7 @@ const OrdersAdminScreen = () => {
 
   const sanitizeCommentText = (text: string) =>
     text
-      .replace(/[^A-Za-zÀ-ÖØ-öø-ÿ\s]/g, '')
+      .replace(/[^A-Za-zÁ-úñÑáéíóú\s]/g, '')
       .replace(/\s+/g, ' ')
       .trimStart();
 
@@ -621,6 +641,27 @@ const OrdersAdminScreen = () => {
     }
   };
 
+  const handleRejectPayment = async (pedidoId: string) => {
+    try {
+      const pedido = pedidos.find((p) => p.id === pedidoId);
+      if (!pedido) return;
+      if (pedido.estadoFinanciero !== 'por_confirmar_pago') {
+        showMessage('Acción no disponible', 'Solo se puede rechazar cuando el estado es "Por confirmar pago".');
+        return;
+      }
+      const pedidoRef = doc(db, 'Pedidos', pedidoId);
+      await updateDoc(pedidoRef, {
+        estadoFinanciero: 'por_cobrar',
+        fechaCobrado: null,
+        fechaPagado: null,
+      });
+      showMessage('Pago rechazado', 'El pedido volvió a estado "Por cobrar".');
+    } catch (error) {
+      console.error('Error al rechazar pago:', error);
+      showMessage('Error', 'No se pudo rechazar el pago.');
+    }
+  };
+
   // ===== Filtrado local (pedidoID o nombreCliente) =====
   const filteredPedidos = pedidos.filter((item) => {
     const clienteInfo = clientesMap[item.clienteId];
@@ -670,12 +711,14 @@ const OrdersAdminScreen = () => {
   const financeStats = useMemo(() => {
     const totals: Record<EstadoFinanciero, number> = {
       por_cobrar: 0,
+      por_confirmar_pago: 0,
       cobrado: 0,
       pagado: 0,
       cancelado: 0,
     };
     const counts: Record<EstadoFinanciero, number> = {
       por_cobrar: 0,
+      por_confirmar_pago: 0,
       cobrado: 0,
       pagado: 0,
       cancelado: 0,
@@ -693,6 +736,9 @@ const OrdersAdminScreen = () => {
       switch (estadoFin) {
         case 'por_cobrar':
           totals.por_cobrar += base;
+          break;
+        case 'por_confirmar_pago':
+          totals.por_confirmar_pago += base;
           break;
         case 'cobrado':
           totals.cobrado += montoCobrado;
@@ -765,18 +811,18 @@ const OrdersAdminScreen = () => {
         filter: { type: 'finanza', value: 'por_cobrar' },
       },
       {
+        key: 'por_confirmar_pago',
+        colors: ['#fde68a', '#f59e0b'],
+        value: formatCurrency(financeStats.totals.por_confirmar_pago),
+        label: `Por confirmar • ${financeStats.counts.por_confirmar_pago}`,
+        filter: { type: 'finanza', value: 'por_confirmar_pago' },
+      },
+      {
         key: 'cobrados',
         colors: colors.gradientSuccess,
         value: formatCurrency(financeStats.totals.cobrado),
         label: `Cobrados • ${financeStats.counts.cobrado}`,
         filter: { type: 'finanza', value: 'cobrado' },
-      },
-      {
-        key: 'pagados',
-        colors: [colors.secondaryDark, colors.secondary],
-        value: formatCurrency(financeStats.totals.pagado),
-        label: `Pagados • ${financeStats.counts.pagado}`,
-        filter: { type: 'finanza', value: 'pagado' },
       },
       {
         key: 'neto',
@@ -835,6 +881,7 @@ const OrdersAdminScreen = () => {
 
   const financialLabels: Record<EstadoFinanciero, string> = {
     por_cobrar: 'Por cobrar',
+    por_confirmar_pago: 'Por confirmar pago',
     cobrado: 'Cobrado',
     pagado: 'Pagado a proveedor',
     cancelado: 'Cancelado',
@@ -842,6 +889,7 @@ const OrdersAdminScreen = () => {
 
   const financialColors: Record<EstadoFinanciero, string> = {
     por_cobrar: '#F59E0B',
+    por_confirmar_pago: '#f59e0b',
     cobrado: colors.success,
     pagado: colors.secondaryDark,
     cancelado: colors.error,
@@ -886,189 +934,52 @@ const OrdersAdminScreen = () => {
       const disableToPagado = estadoFinanciero === 'pagado' || isFinCancelado;
 
       const isSelected = pedido.id === selectedOrderId;
-      const observacionesSafe = pedido.observaciones
-        ? sanitizeCommentText(pedido.observaciones).slice(0, MAX_COMMENT_LENGTH)
-        : '';
-
       return (
         <TouchableOpacity
           activeOpacity={0.9}
           style={[styles.card, isSelected && styles.cardSelected]}
           onPress={() => handleSelectOrder(pedido.id)}
         >
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>{tituloPedido}</Text>
-            <View style={[styles.estadoBadge, { backgroundColor: estadoColor }]}> 
-              <Text style={styles.estadoBadgeText}>{pedido.estado.toUpperCase()}</Text>
+          <View style={styles.cardHeaderCompact}>
+            <View>
+              <Text style={styles.cardTitleCompact}>{tituloPedido}</Text>
+              <Text style={styles.cardSubText}>{formatFecha(pedido.fecha)} · {pedido.hora}</Text>
+            </View>
+            <View style={styles.badgesRowCompact}>
+              <View style={[styles.estadoBadge, { backgroundColor: estadoColor }]}>
+                <Text style={styles.estadoBadgeText}>{pedido.estado.toUpperCase()}</Text>
+              </View>
+              <View style={[styles.financeBadge, { borderColor: estadoFinColor }]}> 
+                <Ionicons name="wallet-outline" size={14} color={estadoFinColor} />
+                <Text style={[styles.financeBadgeText, { color: estadoFinColor }]}>{estadoFinLabel}</Text>
+              </View>
             </View>
           </View>
 
-          <View style={styles.cardBody}>
-            <View style={styles.infoRow}>
-              <View style={styles.infoItem}>
-                <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.infoLabel}>Cliente</Text>
-                <Text style={styles.infoValue}>{clienteNombre}</Text>
-              </View>
-              
-              <View style={styles.infoItem}>
-                <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.infoLabel}>Dirección</Text>
-                <Text style={styles.infoValue}>{clienteDireccion}</Text>
-              </View>
+          <View style={styles.compactInfoRow}>
+            <View style={styles.compactInfoItem}>
+              <Ionicons name="person-outline" size={14} color={colors.textSecondary} />
+              <Text style={styles.compactLabel}>Cliente</Text>
+              <Text style={styles.compactValue} numberOfLines={1}>{clienteNombre}</Text>
             </View>
+            <View style={styles.compactInfoItemCenter}>
+              <Text style={styles.compactLabel}>Botellones</Text>
+              <Text style={styles.compactValue}>{pedido.cantidadConAsa} con asa · {pedido.cantidadSinAsa} sin asa</Text>
+            </View>
+            <View style={styles.compactInfoItemEnd}>
+              <Text style={styles.compactLabel}>Total</Text>
+              <Text style={styles.compactValueStrong}>{formatCurrency(pedido.total)}</Text>
+            </View>
+          </View>
 
-            <View style={styles.infoRow}>
-              <View style={styles.infoItem}>
-                <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.infoLabel}>Fecha</Text>
-                <Text style={styles.infoValue}>{pedido.fecha}</Text>
-              </View>
-              
-              <View style={styles.infoItem}>
-                <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.infoLabel}>Hora</Text>
-                <Text style={styles.infoValue}>{pedido.hora}</Text>
-              </View>
-            </View>
-
-            <View style={styles.quantitiesContainer}>
-              <View style={styles.quantityItem}>
-                <Text style={styles.quantityLabel}>Con Asa</Text>
-                <Text style={styles.quantityValue}>{pedido.cantidadConAsa}</Text>
-              </View>
-              
-              <View style={styles.quantityItem}>
-                <Text style={styles.quantityLabel}>Sin Asa</Text>
-                <Text style={styles.quantityValue}>{pedido.cantidadSinAsa}</Text>
-              </View>
-              
-              <View style={styles.quantityItem}>
-                <Text style={styles.quantityLabel}>Total</Text>
-                <Text style={[styles.quantityValue, styles.totalQuantity]}>{totalBotellones}</Text>
-              </View>
-            </View>
-
-            <View style={styles.footerRow}>
-              <View style={styles.totalContainer}>
-                <Text style={styles.totalLabel}>Total:</Text>
-                <Text style={styles.totalValue}>{formatCurrency(pedido.total)}</Text>
-              </View>
-              
-              {observacionesSafe ? (
-                <View style={styles.observacionesContainer}>
-                  <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
-                  <Text style={styles.observacionesText}>{observacionesSafe}</Text>
-                </View>
-              ) : null}
-            </View>
-
-            <View style={styles.financeSummaryRow}>
-              <View style={styles.financeSummaryItem}>
-                <Text style={styles.financeSummaryLabel}>Cobrado</Text>
-                <Text style={styles.financeSummaryValue}>{formatCurrency(pedido.montoCobrado ?? 0)}</Text>
-              </View>
-              <View style={styles.financeSummaryItem}>
-                <Text style={styles.financeSummaryLabel}>Pagado</Text>
-                <Text style={styles.financeSummaryValue}>{formatCurrency(pedido.montoPagado ?? 0)}</Text>
-              </View>
-            </View>
-
-            <View style={styles.financeStateRow}>
-              <View style={[styles.financeBadge, { borderColor: estadoFinColor }]}> 
-                <Ionicons name="wallet-outline" size={16} color={estadoFinColor} />
-                <Text style={[styles.financeBadgeText, { color: estadoFinColor }]}>{estadoFinLabel}</Text>
-              </View>
-              <View style={styles.financeActions}>
-                <TouchableOpacity
-                  style={[
-                    styles.financeButton,
-                    estadoFinanciero === 'cobrado' && styles.financeButtonActive,
-                    disableToCobrado && styles.financeButtonDisabled,
-                  ]}
-                  disabled={disableToCobrado}
-                  onPress={() => handleChangeEstadoFinanciero(pedido.id, 'cobrado')}
-                >
-                  <Text
-                    style={[
-                      styles.financeButtonText,
-                      estadoFinanciero === 'cobrado' && styles.financeButtonTextActive,
-                      disableToCobrado && styles.financeButtonTextDisabled,
-                    ]}
-                  >
-                    Cobrado
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.financeButton,
-                    estadoFinanciero === 'pagado' && styles.financeButtonActive,
-                    disableToPagado && styles.financeButtonDisabled,
-                  ]}
-                  disabled={disableToPagado}
-                  onPress={() => handleChangeEstadoFinanciero(pedido.id, 'pagado')}
-                >
-                  <Text
-                    style={[
-                      styles.financeButtonText,
-                      estadoFinanciero === 'pagado' && styles.financeButtonTextActive,
-                      disableToPagado && styles.financeButtonTextDisabled,
-                    ]}
-                  >
-                    Pagado
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.buttonsContainer}>
-              {mostrarBotonListo && pedido.estado !== 'cancelado' && (
-                <TouchableOpacity
-                  style={[styles.button, styles.buttonListo]}
-                  onPress={() => handleChangeEstado(pedido.id, 'listo')}
-                >
-                  <Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} />
-                  <Text style={styles.buttonText}>Marcar como Listo</Text>
-                </TouchableOpacity>
-              )}
-              {mostrarBotonEntregado && pedido.estado !== 'cancelado' && (
-                <View style={styles.entregadoButtonContainer}>
-                  <TouchableOpacity
-                    style={[styles.button, styles.buttonEntregado]}
-                    onPress={() => handleChangeEstado(pedido.id, 'entregado')}
-                  >
-                    <Ionicons name="checkmark-done-outline" size={18} color={colors.textInverse} />
-                    <Text style={styles.buttonText}>Marcar Entregado</Text>
-                  </TouchableOpacity>
-                  
-                  {/* Tooltip de información */}
-                  <TouchableOpacity 
-                    style={styles.tooltipIcon}
-                    onPress={() => setShowTooltip(showTooltip === pedido.id ? null : pedido.id)}
-                  >
-                    <Ionicons name="information-circle-outline" size={18} color={colors.textSecondary} />
-                  </TouchableOpacity>
-                  
-                  {showTooltip === pedido.id && (
-                    <View style={styles.tooltipContainer}>
-                      <Text style={styles.tooltipText}>
-                        Este pedido ya está marcado como LISTO y puede ser entregado al cliente
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-              
-              {/* Mensaje informativo cuando no se puede entregar */}
-              {pedido.estado === 'pendiente' && (
-                <View style={styles.infoMessage}>
-                  <Ionicons name="information-circle" size={16} color={colors.warning} />
-                  <Text style={styles.infoMessageText}>
-                    Debe marcar como LISTO antes de poder entregar
-                  </Text>
-                </View>
-              )}
-            </View>
+          <View style={styles.cardFooterCompact}>
+            <TouchableOpacity
+              style={[styles.chipButton, styles.chipGhost]}
+              onPress={() => openDetailModal(pedido)}
+            >
+              <Ionicons name="eye-outline" size={14} color={colors.primary} />
+              <Text style={[styles.chipButtonText, { color: colors.primary }]}>Ver detalle</Text>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       );
@@ -1079,6 +990,40 @@ const OrdersAdminScreen = () => {
   const [cancelOrderModalVisible, setCancelOrderModalVisible] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<Pedido | null>(null);
 
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [detailOrder, setDetailOrder] = useState<Pedido | null>(null);
+  const [showCobroForm, setShowCobroForm] = useState(false);
+  const [showBankDropdown, setShowBankDropdown] = useState(false);
+  const [cobroForm, setCobroForm] = useState({
+    metodo: 'pago_movil',
+    ref: '',
+    banco: '',
+    monto: '',
+  });
+  const detailEstadoFinanciero = detailOrder ? resolvePedidoFinancialState(detailOrder) : null;
+  const detailFinCancelado = detailEstadoFinanciero === 'cancelado';
+  const detailDisableCobrado = detailEstadoFinanciero === 'cobrado' || detailEstadoFinanciero === 'pagado' || detailFinCancelado;
+  const detailMostrarBotonListo = detailOrder?.estado === 'pendiente';
+  const detailMostrarBotonEntregado = detailOrder?.estado === 'listo';
+
+  useEffect(() => {
+    if (!detailOrder) return;
+    const updated = pedidos.find((p) => p.id === detailOrder.id);
+    if (updated) {
+      setDetailOrder(updated);
+    }
+  }, [pedidos, detailOrder?.id]);
+
+  useEffect(() => {
+    setShowCobroForm(false);
+    setShowBankDropdown(false);
+    setCobroForm({
+      metodo: detailOrder?.metodoPago || 'pago_movil',
+      ref: detailOrder?.refPagoUlt6 || '',
+      banco: detailOrder?.bancoEmisor || '',
+      monto: '',
+    });
+  }, [detailOrder?.id]);
   const handleCancelOrder = async () => {
     if (!orderToCancel) return;
     try {
@@ -1098,6 +1043,36 @@ const OrdersAdminScreen = () => {
     } catch (error) {
       showMessage('Error', 'No se pudo cancelar el pedido.');
     }
+  };
+
+  const handleSubmitCobro = async () => {
+    if (!detailOrder) return;
+    const montoNumber = Number(cobroForm.monto);
+    if (!Number.isFinite(montoNumber) || montoNumber <= 0) {
+      showMessage('Monto inválido', 'Ingresa un monto mayor a cero.');
+      return;
+    }
+    try {
+      const pedidoRef = doc(db, 'Pedidos', detailOrder.id);
+      await updateDoc(pedidoRef, {
+        estadoFinanciero: 'cobrado',
+        montoCobrado: montoNumber,
+        fechaCobrado: serverTimestamp(),
+        fechaRefPago: serverTimestamp(),
+        refPagoUlt6: cobroForm.ref.trim(),
+        bancoEmisor: cobroForm.banco.trim(),
+        metodoPago: cobroForm.metodo,
+      });
+      setShowCobroForm(false);
+    } catch (error) {
+      console.error('Error al registrar cobro:', error);
+      showMessage('Error', 'No se pudo registrar el cobro.');
+    }
+  };
+
+  const openDetailModal = (pedido: Pedido) => {
+    setDetailOrder(pedido);
+    setDetailModalVisible(true);
   };
 
   // ===== Estado y handlers para editar pedido =====
@@ -1235,6 +1210,41 @@ const OrdersAdminScreen = () => {
     );
   }
 
+  const headerActionButtons = (
+    <>
+      <TouchableOpacity style={styles.headerActionButton} onPress={openCreateOrderModal}>
+        <Ionicons name="add" size={18} color={colors.textInverse} />
+        <Text style={styles.headerActionText}>Crear Pedido</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[
+          styles.headerActionButton,
+          styles.headerActionButtonSecondary,
+          (!selectedOrder || !canModifySelected) && styles.headerActionButtonDisabled,
+        ]}
+        onPress={handleEditOrderAction}
+        disabled={!selectedOrder || !canModifySelected}
+      >
+        <Ionicons name="create" size={18} color={colors.textInverse} />
+        <Text style={styles.headerActionText}>Editar Pedido</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[
+          styles.headerActionButton,
+          styles.headerActionButtonDanger,
+          (!selectedOrder || !canModifySelected) && styles.headerActionButtonDisabled,
+        ]}
+        onPress={handleCancelOrderAction}
+        disabled={!selectedOrder || !canModifySelected}
+      >
+        <Ionicons name="trash" size={18} color={colors.textInverse} />
+        <Text style={styles.headerActionText}>Cancelar Pedido</Text>
+      </TouchableOpacity>
+    </>
+  );
+
   // Render final
   return (
     <View style={styles.container}>
@@ -1252,7 +1262,7 @@ const OrdersAdminScreen = () => {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         >
-          <View style={styles.headerContent}>
+          <View style={[styles.headerContent, isSmallScreen && styles.headerContentStack]}>
             <View style={styles.headerTitleContainer}>
               <Ionicons name="receipt-outline" size={28} color={colors.textInverse} />
               <View>
@@ -1260,38 +1270,19 @@ const OrdersAdminScreen = () => {
                 <Text style={styles.headerSubtitle}>Panel de administración</Text>
               </View>
             </View>
-            <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.headerActionButton} onPress={openCreateOrderModal}>
-                <Ionicons name="add" size={18} color={colors.textInverse} />
-                <Text style={styles.headerActionText}>Crear Pedido</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.headerActionButton,
-                  styles.headerActionButtonSecondary,
-                  (!selectedOrder || !canModifySelected) && styles.headerActionButtonDisabled,
-                ]}
-                onPress={handleEditOrderAction}
-                disabled={!selectedOrder || !canModifySelected}
+            {isSmallScreen ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.headerActionsHorizontal}
               >
-                <Ionicons name="create" size={18} color={colors.textInverse} />
-                <Text style={styles.headerActionText}>Editar Pedido</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.headerActionButton,
-                  styles.headerActionButtonDanger,
-                  (!selectedOrder || !canModifySelected) && styles.headerActionButtonDisabled,
-                ]}
-                onPress={handleCancelOrderAction}
-                disabled={!selectedOrder || !canModifySelected}
-              >
-                <Ionicons name="trash" size={18} color={colors.textInverse} />
-                <Text style={styles.headerActionText}>Cancelar Pedido</Text>
-              </TouchableOpacity>
-            </View>
+                {headerActionButtons}
+              </ScrollView>
+            ) : (
+              <View style={styles.headerActions}>
+                {headerActionButtons}
+              </View>
+            )}
           </View>
           <View style={styles.inventoryAlert}>
             {sellosCantidad < 200 && (
@@ -1323,15 +1314,20 @@ const OrdersAdminScreen = () => {
               return (
                 <TouchableOpacity
                   key={card.key}
-                  style={styles.statCardWrapper}
+                  style={[styles.statCardWrapper, highlight && styles.statCardWrapperActive]}
                   activeOpacity={card.filter ? 0.85 : 1}
                   onPress={() => handleCardPress(card.filter)}
                   disabled={!card.filter}
                 >
                   <LinearGradient
                     colors={card.colors}
-                    style={[styles.statCard, highlight && styles.statCardActive]}
+                    style={[styles.statCard, highlight && styles.statCardActive, highlight && styles.statCardActivePadded]}
                   >
+                    {highlight && (
+                      <View style={styles.statBadgeActive}>
+                        <Text style={styles.statBadgeActiveText}>Activo</Text>
+                      </View>
+                    )}
                     <Text style={styles.statNumber}>{card.value}</Text>
                     <Text style={styles.statLabel}>{card.label}</Text>
                   </LinearGradient>
@@ -1385,6 +1381,196 @@ const OrdersAdminScreen = () => {
           <View style={styles.bottomSpacing} />
         </View>
       </ScrollView>
+
+      {/* Modal Detalle de Pedido */}
+      <Modal visible={detailModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlayAdmin}>
+          <View style={[styles.modalContentAdmin, { maxHeight: height * 0.9 }]}> 
+            <Text style={styles.modalTitleAdmin}>Detalle del Pedido</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {detailOrder ? (
+                <View style={{ gap: 12 }}>
+                  <View style={styles.detailRow}> 
+                    <Text style={styles.detailLabel}>Pedido</Text>
+                    <Text style={styles.detailValue}>{detailOrder.numeroPedido ? `Nº ${formatOrderNumber(detailOrder.numeroPedido)}` : detailOrder.id}</Text>
+                  </View>
+                  <View style={styles.detailRow}> 
+                    <Text style={styles.detailLabel}>Cliente</Text>
+                    <Text style={styles.detailValue}>{(clientesMap[detailOrder.clienteId]?.nombre || 'Sin nombre').toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.detailRow}> 
+                    <Text style={styles.detailLabel}>Dirección</Text>
+                    <Text style={styles.detailValue}>{(clientesMap[detailOrder.clienteId]?.direccion || 'Sin dirección').toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.detailRow}> 
+                    <Text style={styles.detailLabel}>Fecha</Text>
+                    <Text style={styles.detailValue}>{formatFecha(detailOrder.fecha)} · {detailOrder.hora}</Text>
+                  </View>
+                  <View style={styles.detailRow}> 
+                    <Text style={styles.detailLabel}>Botellones</Text>
+                    <Text style={styles.detailValue}>{detailOrder.cantidadConAsa} con asa · {detailOrder.cantidadSinAsa} sin asa (total {detailOrder.cantidadConAsa + detailOrder.cantidadSinAsa})</Text>
+                  </View>
+                  <View style={styles.detailRow}> 
+                    <Text style={styles.detailLabel}>Monto</Text>
+                    <Text style={styles.detailValue}>{formatCurrency(detailOrder.total)}</Text>
+                  </View>
+                  <View style={styles.detailRow}> 
+                    <Text style={styles.detailLabel}>Estado</Text>
+                    <Text style={styles.detailValue}>{detailOrder.estado.toUpperCase()}</Text>
+                  </View>
+                  <View style={styles.detailRow}> 
+                    <Text style={styles.detailLabel}>Finanzas</Text>
+                    <Text style={styles.detailValue}>{financialLabels[resolvePedidoFinancialState(detailOrder)]}</Text>
+                  </View>
+                  <View style={styles.detailBlock}>
+                    <Text style={styles.detailBlockTitle}>Pago</Text>
+                    <Text style={styles.detailValueSmall}>Ref: {detailOrder.refPagoUlt6 || 'N/D'}</Text>
+                    <Text style={styles.detailValueSmall}>Banco: {detailOrder.bancoEmisor || 'N/D'}</Text>
+                    <Text style={styles.detailValueSmall}>Monto pagado: {formatCurrency(detailOrder.montoPagado ?? 0)}</Text>
+                    <Text style={styles.detailValueSmall}>Fecha ref: {formatTsDateTime(detailOrder.fechaRefPago)}</Text>
+                  </View>
+                  {detailOrder.observaciones ? (
+                    <View style={styles.detailBlock}>
+                      <Text style={styles.detailBlockTitle}>Notas</Text>
+                      <Text style={styles.detailValueSmall}>{sanitizeCommentText(detailOrder.observaciones)}</Text>
+                    </View>
+                  ) : null}
+                  {showCobroForm && (
+                    <View style={styles.detailBlock}>
+                      <Text style={styles.detailBlockTitle}>Registrar cobro</Text>
+                      <View style={styles.detailFormRow}>
+                        <Text style={styles.detailLabel}>Método</Text>
+                        <View style={styles.detailFormPillRow}>
+                          {['transferencia', 'pago_movil', 'efectivo'].map((m) => (
+                            <TouchableOpacity
+                              key={m}
+                              style={[styles.detailFormPill, cobroForm.metodo === m && styles.detailFormPillActive]}
+                              onPress={() => setCobroForm((prev) => ({ ...prev, metodo: m }))}
+                            >
+                              <Text style={[styles.detailFormPillText, cobroForm.metodo === m && styles.detailFormPillTextActive]}>{m === 'pago_movil' ? 'Pago móvil' : m.charAt(0).toUpperCase() + m.slice(1)}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                      {cobroForm.metodo !== 'efectivo' && (
+                        <TextInput
+                          style={styles.detailInput}
+                          placeholder="Últimos 6 de la referencia"
+                          placeholderTextColor={colors.textSecondary}
+                          value={cobroForm.ref}
+                          onChangeText={(t) => setCobroForm((prev) => ({ ...prev, ref: t }))}
+                        />
+                      )}
+                      <View style={styles.detailFormRow}>
+                        <Text style={styles.detailLabel}>Banco</Text>
+                        <TouchableOpacity
+                          style={styles.detailBankSelector}
+                          onPress={() => setShowBankDropdown((prev) => !prev)}
+                        >
+                          <Text style={styles.detailBankSelectorText} numberOfLines={1}>
+                            {cobroForm.banco || 'Selecciona un banco'}
+                          </Text>
+                          <Ionicons
+                            name={showBankDropdown ? 'chevron-up' : 'chevron-down'}
+                            size={18}
+                            color={colors.textSecondary}
+                          />
+                        </TouchableOpacity>
+                        {showBankDropdown && (
+                          <View style={styles.detailBankList}>
+                            <ScrollView style={{ maxHeight: 200 }}>
+                              {VE_BANKS.map((banco) => (
+                                <TouchableOpacity
+                                  key={banco.code}
+                                  style={[styles.detailBankItem, cobroForm.banco === banco.name && styles.detailBankItemActive]}
+                                  onPress={() => {
+                                    setCobroForm((prev) => ({ ...prev, banco: banco.name }));
+                                    setShowBankDropdown(false);
+                                  }}
+                                >
+                                  <Text style={[styles.detailBankText, cobroForm.banco === banco.name && styles.detailBankTextActive]}>
+                                    {banco.name}
+                                  </Text>
+                                </TouchableOpacity>
+                              ))}
+                            </ScrollView>
+                          </View>
+                        )}
+                      </View>
+                      <TextInput
+                        style={styles.detailInput}
+                        placeholder="Monto recibido"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="numeric"
+                        value={cobroForm.monto}
+                        onChangeText={(t) => setCobroForm((prev) => ({ ...prev, monto: t }))}
+                      />
+                      <View style={styles.detailFormActions}>
+                        <TouchableOpacity
+                          style={[styles.detailActionButton, styles.detailActionOutline]}
+                          onPress={() => {
+                            setShowCobroForm(false);
+                            setShowBankDropdown(false);
+                          }}
+                        >
+                          <Text style={styles.detailActionText}>Cancelar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.detailActionButton, styles.detailActionPrimary]} onPress={handleSubmitCobro}>
+                          <Text style={[styles.detailActionText, { color: colors.textInverse }]}>Guardar cobro</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                  <View style={styles.detailActionsRow}>
+                    {detailMostrarBotonListo && detailOrder.estado !== 'cancelado' && (
+                      <TouchableOpacity
+                        style={[styles.detailActionButton, styles.detailActionSuccess]}
+                        onPress={() => handleChangeEstado(detailOrder.id, 'listo')}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={16} color={colors.textInverse} />
+                        <Text style={[styles.detailActionText, { color: colors.textInverse }]}>Marcar listo</Text>
+                      </TouchableOpacity>
+                    )}
+                    {detailMostrarBotonEntregado && detailOrder.estado !== 'cancelado' && (
+                      <TouchableOpacity
+                        style={[styles.detailActionButton, styles.detailActionPrimary]}
+                        onPress={() => handleChangeEstado(detailOrder.id, 'entregado')}
+                      >
+                        <Ionicons name="checkmark-done-outline" size={16} color={colors.textInverse} />
+                        <Text style={[styles.detailActionText, { color: colors.textInverse }]}>Marcar entregado</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.detailActionButton, detailDisableCobrado ? styles.detailActionDisabled : styles.detailActionOutline]}
+                      disabled={detailDisableCobrado}
+                      onPress={() => setShowCobroForm((prev) => !prev)}
+                    >
+                      <Ionicons name="wallet-outline" size={16} color={detailDisableCobrado ? colors.textSecondary : colors.primary} />
+                      <Text style={[styles.detailActionText, { color: detailDisableCobrado ? colors.textSecondary : colors.primary }]}>
+                        {detailEstadoFinanciero === 'por_confirmar_pago' ? 'Confirmar pago' : 'Registrar cobro'}
+                      </Text>
+                    </TouchableOpacity>
+                    {detailEstadoFinanciero === 'por_confirmar_pago' && (
+                      <TouchableOpacity
+                        style={[styles.detailActionButton, styles.detailActionDanger]}
+                        onPress={() => handleRejectPayment(detailOrder.id)}
+                      >
+                        <Ionicons name="close-circle-outline" size={16} color={colors.textInverse} />
+                        <Text style={[styles.detailActionText, { color: colors.textInverse }]}>Rechazar pago</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              ) : (
+                <Text style={{ color: colors.textSecondary }}>Sin datos</Text>
+              )}
+            </ScrollView>
+            <TouchableOpacity style={[styles.button, styles.buttonListo, { marginTop: 12 }]} onPress={() => setDetailModalVisible(false)}>
+              <Text style={styles.buttonText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Modal Crear Pedido */}
       <Modal visible={showCreateOrderModal} animationType="slide" transparent>
@@ -1811,6 +1997,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  headerContentStack: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
   headerTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1831,6 +2022,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
+  headerActionsHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  headerActionsStack: {
+    width: '100%',
+    justifyContent: 'flex-start',
+  },
   headerActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1840,6 +2041,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
+    flexShrink: 1,
   },
   headerActionButtonSecondary: {
     backgroundColor: 'rgba(255,255,255,0.14)',
@@ -1856,6 +2058,7 @@ const styles = StyleSheet.create({
     color: colors.textInverse,
     fontWeight: '600',
     marginLeft: 6,
+    flexShrink: 1,
   },
   inventoryAlert: {
     flexDirection: 'row',
@@ -1887,6 +2090,15 @@ const styles = StyleSheet.create({
   statCardWrapper: {
     marginRight: 10,
     flexGrow: 0,
+    position: 'relative',
+  },
+  statCardWrapperActive: {
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+    transform: [{ translateY: -2 }],
   },
   statCard: {
     paddingVertical: 14,
@@ -1902,10 +2114,33 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
   },
   statCardActive: {
-    borderColor: 'rgba(255,255,255,0.85)',
+    borderColor: 'rgba(255,255,255,0.9)',
     borderWidth: 2,
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  statCardActivePadded: {
+    paddingTop: 26,
+  },
+  statBadgeActive: {
+    position: 'absolute',
+    top: -6,
+    left: -6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  statBadgeActiveText: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   statNumber: {
     fontSize: 22,
@@ -1972,6 +2207,31 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.secondary,
   },
+  // Compact card layout
+  cardHeaderCompact: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.grayShades[50],
+  },
+  cardTitleCompact: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  cardSubText: {
+    marginTop: 2,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  badgesRowCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1998,10 +2258,274 @@ const styles = StyleSheet.create({
   cardBody: {
     padding: 16,
   },
+  compactInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.grayShades[50],
+  },
+  compactInfoItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  compactInfoItemCenter: {
+    flex: 1.2,
+    gap: 4,
+  },
+  compactInfoItemEnd: {
+    flex: 0.9,
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  compactLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  compactValue: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  compactValueStrong: {
+    fontSize: 16,
+    color: colors.success,
+    fontWeight: '700',
+  },
+  cardFooterCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.grayShades[50],
+  },
+  footerActionsCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chipButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  chipButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  chipGhost: {
+    backgroundColor: 'transparent',
+    borderColor: colors.primary,
+  },
+  chipPrimary: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
+  },
+  chipSuccess: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  chipOutline: {
+    borderColor: colors.primary,
+  },
+  chipDanger: {
+    backgroundColor: colors.error,
+    borderColor: colors.error,
+  },
+  chipDisabled: {
+    opacity: 0.55,
+    borderColor: colors.border,
+  },
+  chipTextPrimary: {
+    color: colors.primary,
+  },
+  chipTextDisabled: {
+    color: colors.textSecondary,
+  },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 16,
+  },
+  // Detail modal styles
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 10,
+  },
+  detailLabel: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  detailValue: {
+    color: colors.textPrimary,
+    fontWeight: '700',
+    fontSize: 14,
+    flex: 1,
+    textAlign: 'right',
+  },
+  detailBlock: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    gap: 4,
+  },
+  detailBlockTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  detailValueSmall: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  detailActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  detailActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  detailActionText: {
+    fontWeight: '600',
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  detailActionOutline: {
+    borderColor: colors.primary,
+  },
+  detailActionPrimary: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
+  },
+  detailActionSuccess: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  detailActionDanger: {
+    backgroundColor: colors.error,
+    borderColor: colors.error,
+  },
+  detailActionDisabled: {
+    opacity: 0.55,
+  },
+  detailFormRow: {
+    marginBottom: 8,
+  },
+  detailFormPillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  detailFormPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  detailFormPillActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.secondaryLight,
+  },
+  detailFormPillText: {
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  detailFormPillTextActive: {
+    color: colors.secondaryDark,
+  },
+  detailInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
+    color: colors.textPrimary,
+    marginBottom: 8,
+  },
+  detailBankSelector: {
+    marginTop: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    backgroundColor: colors.background,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  detailBankSelectorText: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  detailBankList: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    backgroundColor: colors.background,
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  detailBankItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  detailBankItemActive: {
+    backgroundColor: colors.secondaryLight,
+  },
+  detailBankText: {
+    color: colors.textPrimary,
+    fontSize: 14,
+  },
+  detailBankTextActive: {
+    color: colors.secondaryDark,
+    fontWeight: '700',
+  },
+  detailFormActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 6,
   },
   infoItem: {
     flex: 1,
@@ -2142,6 +2666,10 @@ const styles = StyleSheet.create({
   financeButtonActive: {
     backgroundColor: colors.secondary,
     borderColor: colors.secondary,
+  },
+  confirmPaymentButton: {
+    backgroundColor: '#fef3c7',
+    borderColor: colors.warning,
   },
   financeButtonDisabled: {
     opacity: 0.5,
@@ -2481,7 +3009,9 @@ const styles = StyleSheet.create({
   },
   modalButtonsAdmin: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
+    justifyContent: 'space-between',
   },
   modalButtonCancelAdmin: {
     flex: 1,
