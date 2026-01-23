@@ -28,6 +28,7 @@ secondaryDark: "#0096c7" ,
   // Estados y feedback (usados en Dashboard)
   success: "#4CAF50",
   error: "#DC2626",
+  danger: "#DC2626",
   warning: "#D97706",
   info: "#2196F3",
   disabled: "#CBD5E1",
@@ -115,27 +116,36 @@ const borderRadius = {
 
 // Sombras para profundidad
 const shadows = {
-  small: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  medium: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  large: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
-  },
+  small: Platform.select({
+    web: { boxShadow: "0px 2px 4px rgba(0,0,0,0.1)" },
+    default: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+  }),
+  medium: Platform.select({
+    web: { boxShadow: "0px 4px 8px rgba(0,0,0,0.15)" },
+    default: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+  }),
+  large: Platform.select({
+    web: { boxShadow: "0px 8px 16px rgba(0,0,0,0.2)" },
+    default: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.2,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+  }),
 };
 
 // Equivalentes para Web (react-native-web recomienda usar boxShadow)

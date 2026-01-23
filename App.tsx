@@ -19,7 +19,8 @@ import SalesScreen from './src/screens/SalesScreen';
 import StatsScreen from './src/screens/StatsScreen';
 import InventoryScreen from './src/screens/InventoryScreen';
 import MaintenanceScreen from './src/screens/MaintenanceScreen';
-import InvoicesScreen from './src/screens/InvoicesScreen';
+import InvoicesAdminScreen from './src/screens/InvoicesAdminScreen';
+import UserInvoicesScreen from './src/screens/UserInvoicesScreen';
 import ProvidersScreen from './src/screens/ProvidersScreen';
 import OrdersAdminScreen from './src/screens/OrdersAdminScreen';
 import CreateScreenUser from './src/screens/CreateScreenUser';
@@ -48,15 +49,17 @@ const MainDrawerNavigator = ({ route }: { route: any }) => {
           <Drawer.Screen name="Stats" component={StatsScreen} options={{ title: 'Estadísticas' }} />
           <Drawer.Screen name="Inventory" component={InventoryScreen} options={{ title: 'Inventario' }} />
           <Drawer.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Mantenimiento' }} />
-          <Drawer.Screen name="Invoices" component={InvoicesScreen} options={{ title: 'Facturas' }} />
+          <Drawer.Screen name="Invoices" component={InvoicesAdminScreen} options={{ title: 'Facturas' }} />
           <Drawer.Screen name="Providers" component={ProvidersScreen} options={{ title: 'Proveedores' }} />
           <Drawer.Screen name="OrdersA" component={OrdersAdminScreen} options={{ title: 'Pedidos (admin)' }} />
           <Drawer.Screen name="Create" component={CreateScreenUser} options={{ title: 'Crear usuario' }} />
           
         </>
       ) : (
-        <Drawer.Screen name="UserDashboard" component={UserDashboardScreen} options={{ title: 'Panel de usuario' }} />
-        
+        <>
+          <Drawer.Screen name="UserDashboard" component={UserDashboardScreen} options={{ title: 'Panel de usuario' }} />
+          <Drawer.Screen name="UserInvoices" component={UserInvoicesScreen} options={{ title: 'Facturas' }} />
+        </>
       )}
 
       {/* Opciones comunes */}

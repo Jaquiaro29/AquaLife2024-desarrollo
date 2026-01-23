@@ -1730,6 +1730,40 @@ type PendingOrder = {
   estado?: string;
 };
 
+// Web-safe shadows: use boxShadow on web, keep native shadows elsewhere
+const shadowElev3 = Platform.select({
+  web: { boxShadow: '0px 2px 6px rgba(0,0,0,0.08)' } as any,
+  default: {
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+  },
+});
+
+const shadowElev5 = Platform.select({
+  web: { boxShadow: '0px 4px 10px rgba(0,0,0,0.10)' } as any,
+  default: {
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+});
+
+const shadowElev6 = Platform.select({
+  web: { boxShadow: '0px 3px 8px rgba(0,0,0,0.12)' } as any,
+  default: {
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+  },
+});
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1748,11 +1782,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    ...shadowElev5,
   },
   // Contenedor para el contenido debajo del header
   content: {
@@ -1840,11 +1870,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 14,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
+    ...shadowElev6,
     width: 320,
     minHeight: 160,
     marginTop: 0,
@@ -1924,11 +1950,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   cardElevated: {
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    ...shadowElev5,
   },
   cardIconContainer: {
     width: 50,
@@ -1974,11 +1996,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   metricCardElevated: {
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
+    ...shadowElev3,
   },
   metricHeader: {
     flexDirection: 'row',
@@ -2006,11 +2024,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     marginBottom: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
+    ...shadowElev3,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -2121,11 +2135,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   infoBoxElevated: {
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
+    ...shadowElev3,
   },
   infoHeader: {
     flexDirection: 'row',
@@ -2166,11 +2176,7 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 12,
     marginBottom: 15,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
+    ...shadowElev3,
   },
   toggleButtonText: {
     fontSize: 16,
