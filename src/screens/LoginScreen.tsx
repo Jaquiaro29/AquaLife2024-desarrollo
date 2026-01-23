@@ -123,6 +123,9 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  const supportEmail = 'support@aqualifeweb.com';
+  const resetContinueUrl = 'https://aqualifeweb.com';
+
   // Manejar "Olvidaste tu contraseña?"
   const handleForgotPassword = async () => {
     if (!email) {
@@ -135,10 +138,25 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
     }
     try {
       const auth = getAuth();
-      await sendPasswordResetEmail(auth, email.trim());
+      // Usar el idioma del dispositivo para emails de Firebase
+      if (auth && typeof auth.useDeviceLanguage === 'function') {
+        auth.useDeviceLanguage();
+      }
+      // Opcional: especificar URL de continuación (debe estar en dominios autorizados en Firebase Auth)
+      await sendPasswordResetEmail(auth, email.trim(), { url: resetContinueUrl });
       showToast('success', 'Se ha enviado un correo para reestablecer la contraseña.');
     } catch (err: any) {
-      showToast('error', 'No se pudo enviar el correo de reseteo. Verifica tu email.');
+      const code = err?.code;
+      switch (code) {
+        case 'auth/user-not-found':
+          showToast('error', 'El correo no está registrado.');
+          break;
+        case 'auth/invalid-email':
+          showToast('error', 'El formato del correo no es válido.');
+          break;
+        default:
+          showToast('error', 'No se pudo enviar el correo de reseteo. Verifica tu email.');
+      }
     }
   };
 
@@ -213,7 +231,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
           {/* ¿Tienes problemas? (ejemplo de mensaje) */}
           <TouchableOpacity
             style={styles.helpButton}
-            onPress={() => showToast('error', 'Contacta al soporte para más ayuda.')}
+            onPress={() => showToast('error', `Contacta a soporte en ${supportEmail}.`)}
           >
             <Text style={styles.helpButtonText}>¿Tienes problemas para iniciar sesión?</Text>
           </TouchableOpacity>
