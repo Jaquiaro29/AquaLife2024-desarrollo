@@ -1,5 +1,5 @@
 // LoginScreen.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } 
 import { db } from '../../firebaseConfig'; // Ajusta la ruta a tu config
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Ajusta si usas un tipo de Navigation distinto
 type LoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
@@ -33,6 +34,39 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetRequests, setResetRequests] = useState<number[]>([]);
+  const [resetLockedUntil, setResetLockedUntil] = useState<number>(0);
+
+  const MAX_RESET_REQUESTS = 5; // más estricto
+  const RESET_WINDOW_MS = 15 * 60 * 1000; // 15 minutos
+  const LOCKOUT_MS = 30 * 60 * 1000; // 30 minutos de bloqueo duro si se supera el límite
+  const RESET_STORAGE_KEY = 'login_reset_attempts_v1';
+
+  // Cargar intentos previos desde almacenamiento persistente para que el límite no se pierda al reiniciar
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(RESET_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { timestamps: number[]; lockedUntil?: number };
+          setResetRequests(parsed.timestamps || []);
+          setResetLockedUntil(parsed.lockedUntil || 0);
+        }
+      } catch {
+        // si falla la lectura, no bloqueamos; solo seguimos
+      }
+    })();
+  }, []);
+
+  const persistResetState = async (timestamps: number[], lockedUntil: number) => {
+    setResetRequests(timestamps);
+    setResetLockedUntil(lockedUntil);
+    try {
+      await AsyncStorage.setItem(RESET_STORAGE_KEY, JSON.stringify({ timestamps, lockedUntil }));
+    } catch {
+      // si no podemos persistir, mantenemos en memoria
+    }
+  };
 
   const { width: screenWidth } = Dimensions.get('window');
   const isSmallScreen = screenWidth < 380;
@@ -128,6 +162,25 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
 
   // Manejar "Olvidaste tu contraseña?"
   const handleForgotPassword = async () => {
+    const now = Date.now();
+    const recent = resetRequests.filter((ts) => now - ts < RESET_WINDOW_MS);
+
+    // Bloqueo duro activo
+    if (resetLockedUntil && now < resetLockedUntil) {
+      const minutesLeft = Math.max(1, Math.ceil((resetLockedUntil - now) / 60000));
+      showToast('error', `Recuperación temporalmente bloqueada. Inténtalo en ${minutesLeft} minuto${minutesLeft === 1 ? '' : 's'}.`);
+      await persistResetState(recent, resetLockedUntil);
+      return;
+    }
+
+    if (recent.length >= MAX_RESET_REQUESTS) {
+      const lockedUntil = now + LOCKOUT_MS;
+      const minutesLeft = Math.max(1, Math.ceil(LOCKOUT_MS / 60000));
+      showToast('error', `Has excedido el límite. Bloqueo por ${minutesLeft} minuto${minutesLeft === 1 ? '' : 's'}.`);
+      await persistResetState(recent, lockedUntil);
+      return;
+    }
+
     if (!email) {
       showToast('error', 'Ingresa tu correo en la casilla de email.');
       return;
@@ -137,6 +190,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
       return;
     }
     try {
+      await persistResetState([...recent, now], 0);
       const auth = getAuth();
       // Usar el idioma del dispositivo para emails de Firebase
       if (auth && typeof auth.useDeviceLanguage === 'function') {
