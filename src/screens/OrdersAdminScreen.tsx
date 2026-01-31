@@ -883,7 +883,7 @@ const OrdersAdminScreen = () => {
     por_cobrar: 'Por cobrar',
     por_confirmar_pago: 'Por confirmar pago',
     cobrado: 'Cobrado',
-    pagado: 'Pagado a proveedor',
+    pagado: 'Pagado',
     cancelado: 'Cancelado',
   };
 
@@ -891,7 +891,7 @@ const OrdersAdminScreen = () => {
     por_cobrar: '#F59E0B',
     por_confirmar_pago: '#f59e0b',
     cobrado: colors.success,
-    pagado: colors.secondaryDark,
+    pagado: colors.success,
     cancelado: colors.error,
   };
 
@@ -1005,6 +1005,9 @@ const OrdersAdminScreen = () => {
   const detailDisableCobrado = detailEstadoFinanciero === 'cobrado' || detailEstadoFinanciero === 'pagado' || detailFinCancelado;
   const detailMostrarBotonListo = detailOrder?.estado === 'pendiente';
   const detailMostrarBotonEntregado = detailOrder?.estado === 'listo';
+  const detailCanConfirmPago = detailEstadoFinanciero === 'por_confirmar_pago' && !detailFinCancelado;
+  // Por ahora, para pedidos de clientes solo se permite confirmar pago (registrar cobro queda deshabilitado).
+  const detailDisableRegistrarCobro = !detailCanConfirmPago;
 
   useEffect(() => {
     if (!detailOrder) return;
@@ -1049,15 +1052,18 @@ const OrdersAdminScreen = () => {
     if (!detailOrder) return;
     const montoNumber = Number(cobroForm.monto);
     if (!Number.isFinite(montoNumber) || montoNumber <= 0) {
-      showMessage('Monto inválido', 'Ingresa un monto mayor a cero.');
+      showMessage('Monto inválido', 'Ingrese el monto que está recibiendo.');
       return;
     }
     try {
       const pedidoRef = doc(db, 'Pedidos', detailOrder.id);
+      const isConfirmingPayment = detailEstadoFinanciero === 'por_confirmar_pago';
       await updateDoc(pedidoRef, {
-        estadoFinanciero: 'cobrado',
-        montoCobrado: montoNumber,
-        fechaCobrado: serverTimestamp(),
+        estadoFinanciero: isConfirmingPayment ? 'pagado' : 'cobrado',
+        montoCobrado: isConfirmingPayment ? detailOrder.montoCobrado ?? 0 : montoNumber,
+        fechaCobrado: isConfirmingPayment ? detailOrder.fechaCobrado ?? null : serverTimestamp(),
+        montoPagado: isConfirmingPayment ? montoNumber : detailOrder.montoPagado ?? 0,
+        fechaPagado: isConfirmingPayment ? serverTimestamp() : detailOrder.fechaPagado ?? null,
         fechaRefPago: serverTimestamp(),
         refPagoUlt6: cobroForm.ref.trim(),
         bancoEmisor: cobroForm.banco.trim(),
@@ -1437,7 +1443,9 @@ const OrdersAdminScreen = () => {
                   ) : null}
                   {showCobroForm && (
                     <View style={styles.detailBlock}>
-                      <Text style={styles.detailBlockTitle}>Registrar cobro</Text>
+                      <Text style={styles.detailBlockTitle}>
+                        {detailEstadoFinanciero === 'por_confirmar_pago' ? 'Confirmar pago' : 'Registrar cobro'}
+                      </Text>
                       <View style={styles.detailFormRow}>
                         <Text style={styles.detailLabel}>Método</Text>
                         <View style={styles.detailFormPillRow}>
@@ -1516,7 +1524,7 @@ const OrdersAdminScreen = () => {
                           <Text style={styles.detailActionText}>Cancelar</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.detailActionButton, styles.detailActionPrimary]} onPress={handleSubmitCobro}>
-                          <Text style={[styles.detailActionText, { color: colors.textInverse }]}>Guardar cobro</Text>
+                          <Text style={[styles.detailActionText, { color: colors.textInverse }]}>Guardar pago</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1541,12 +1549,27 @@ const OrdersAdminScreen = () => {
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity
-                      style={[styles.detailActionButton, detailDisableCobrado ? styles.detailActionDisabled : styles.detailActionOutline]}
-                      disabled={detailDisableCobrado}
-                      onPress={() => setShowCobroForm((prev) => !prev)}
+                      style={[
+                        styles.detailActionButton,
+                        detailDisableRegistrarCobro || detailDisableCobrado ? styles.detailActionDisabled : styles.detailActionOutline,
+                      ]}
+                      disabled={detailDisableRegistrarCobro || detailDisableCobrado}
+                      onPress={() => {
+                        if (detailDisableRegistrarCobro || detailDisableCobrado) return;
+                        setShowCobroForm((prev) => !prev);
+                      }}
                     >
-                      <Ionicons name="wallet-outline" size={16} color={detailDisableCobrado ? colors.textSecondary : colors.primary} />
-                      <Text style={[styles.detailActionText, { color: detailDisableCobrado ? colors.textSecondary : colors.primary }]}>
+                      <Ionicons
+                        name="wallet-outline"
+                        size={16}
+                        color={detailDisableRegistrarCobro || detailDisableCobrado ? colors.textSecondary : colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.detailActionText,
+                          { color: detailDisableRegistrarCobro || detailDisableCobrado ? colors.textSecondary : colors.primary },
+                        ]}
+                      >
                         {detailEstadoFinanciero === 'por_confirmar_pago' ? 'Confirmar pago' : 'Registrar cobro'}
                       </Text>
                     </TouchableOpacity>
