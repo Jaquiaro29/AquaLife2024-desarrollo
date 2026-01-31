@@ -25,7 +25,7 @@ import {
   runTransaction,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../../firebaseConfig';
+import { auth, db } from '../../firebaseConfig';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -48,6 +48,8 @@ interface MovimientoDoc {
   tipoMovimiento: string;
   cantidad: number;
   observaciones?: string;
+  createdByName?: string;
+  createdByUid?: string;
 }
 
 interface SelectedItem {
@@ -145,7 +147,6 @@ const InventoryScreen = () => {
         await updateDoc(doc(db, 'Inventario', editingId), {
           nombre,
           categoria: categoriaFinal,
-          cantidad,
           unidad: unidadFinal,
         });
         showToast('success', 'Artículo actualizado correctamente.');
@@ -325,10 +326,18 @@ const InventoryScreen = () => {
       showToast('error', 'Ingresa una cantidad válida para el movimiento.');
       return;
     }
+    const observaciones = obsMovimiento.trim();
+    if (!observaciones) {
+      showToast('error', 'Agrega observaciones para el movimiento.');
+      return;
+    }
 
     const itemRef = doc(db, 'Inventario', selectedItem.id);
     const movimientoRef = doc(collection(db, 'Inventario', selectedItem.id, 'Movimientos'));
     const delta = tipoMovimiento === 'entrada' ? cantidadMovimiento : -cantidadMovimiento;
+    const user = auth.currentUser;
+    const createdByName = user?.displayName || user?.email || 'Usuario';
+    const createdByUid = user?.uid;
 
     try {
       await runTransaction(db, async (transaction) => {
@@ -349,7 +358,9 @@ const InventoryScreen = () => {
           timestamp: serverTimestamp(),
           tipoMovimiento,
           cantidad: cantidadMovimiento,
-          observaciones: obsMovimiento,
+          observaciones,
+          createdByName,
+          createdByUid,
         });
       });
 
@@ -459,9 +470,14 @@ const InventoryScreen = () => {
                     </View>
                     
                     <View style={styles.movDetails}>
-                      <Text style={styles.movCantidad}>
-                        {mov.cantidad} {item.unidad}
-                      </Text>
+                      <View style={styles.movLeft}>
+                        <Text style={styles.movCantidad}>
+                          {mov.cantidad} {item.unidad}
+                        </Text>
+                        {mov.createdByName ? (
+                          <Text style={styles.movBy}>Por: {mov.createdByName}</Text>
+                        ) : null}
+                      </View>
                       {mov.observaciones && (
                         <Text style={styles.movObservaciones}>Obs: {mov.observaciones}</Text>
                       )}
@@ -952,7 +968,7 @@ const InventoryScreen = () => {
               </View>
               
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Observaciones (opcional)</Text>
+                <Text style={styles.inputLabel}>Observaciones *</Text>
                 <TextInput
                   style={[styles.input, styles.textArea]}
                   placeholder="Detalles del movimiento..."
@@ -1582,12 +1598,20 @@ const styles = StyleSheet.create({
   movDetails: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+  },
+  movLeft: {
+    flexShrink: 0,
   },
   movCantidad: {
     fontSize: 16,
     fontWeight: 'bold',
     color: colors.textPrimary,
+  },
+  movBy: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   movObservaciones: {
     fontSize: 14,

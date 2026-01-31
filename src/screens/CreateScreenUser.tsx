@@ -635,14 +635,6 @@ const CreateUserScreen = () => {
     setShowEditForm(true);
   };
 
-  const handleEditFromHeader = () => {
-    if (!selectedItem) {
-      showToast('error', 'Selecciona un usuario o cliente para editar.');
-      return;
-    }
-    handleModify();
-  };
-
   const openCreateFromHeader = () => {
     setShowForm(true);
     setFormErrors({});
@@ -665,6 +657,7 @@ const CreateUserScreen = () => {
         direccion: editDireccion.trim(),
         email: editEmail.trim().toLowerCase(),
         activo: editActivo,
+        cedula: editCedula,
       };
 
       if (changePassword && newPassword) {
@@ -1352,14 +1345,6 @@ const CreateUserScreen = () => {
       <TouchableOpacity style={styles.headerAddButton} onPress={openCreateFromHeader}>
         <FontAwesome5 name="user-plus" size={16} color={colors.textInverse} />
         <Text style={styles.headerActionText}>Nuevo Usuario</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.headerEditButton, isSmallScreen && styles.headerActionButtonSpacing]}
-        onPress={handleEditFromHeader}
-      >
-        <FontAwesome5 name="edit" size={14} color={colors.textInverse} />
-        <Text style={styles.headerActionText}>Editar</Text>
       </TouchableOpacity>
 
       <TouchableOpacity

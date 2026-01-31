@@ -196,7 +196,7 @@ const InvoicesAdminScreen = () => {
     return () => unsub();
   }, []);
 
-  // Carga de pedidos elegibles (pagados y entregados/listos)
+  // Carga de pedidos elegibles (solo pagados)
   const loadOrders = async () => {
     setLoadingOrders(true);
     try {
@@ -204,8 +204,7 @@ const InvoicesAdminScreen = () => {
       const data = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) } as Pedido));
       const elegibles = data.filter((p) => {
         const paid = p.estadoFinanciero === 'pagado' || p.estadoFinanciero === 'cobrado';
-        const delivered = p.estado === 'entregado' || p.estado === 'listo';
-        return paid && delivered;
+        return paid;
       });
       setOrders(elegibles);
     } catch (err) {
@@ -786,14 +785,6 @@ const InvoicesAdminScreen = () => {
                     <Ionicons name="add-circle-outline" size={18} color={colors.textInverse} />
                     <Text style={[globalStyles.buttonText, globalStyles.buttonTextPrimary, styles.actionButtonText]}>Facturar pedido</Text>
                   </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[globalStyles.button, globalStyles.buttonSecondary, styles.actionButton]}
-                    onPress={() => setModalCrearExterna(true)}
-                  >
-                    <Ionicons name="receipt-outline" size={18} color={colors.textInverse} />
-                    <Text style={[globalStyles.buttonText, globalStyles.buttonTextPrimary, styles.actionButtonText]}>Factura externa</Text>
-                  </TouchableOpacity>
                 </View>
               </View>
             </>
@@ -866,227 +857,6 @@ const InvoicesAdminScreen = () => {
                   <Text style={styles.primaryButtonText}>Crear</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Modal factura externa (estilo y validaciones) */}
-      <Modal visible={modalCrearExterna} animationType="fade" transparent onRequestClose={() => setModalCrearExterna(false)}>
-        <View style={styles.overlay}>
-          <View style={styles.modalCardWide}>
-            <Text style={styles.modalTitle}>Factura externa</Text>
-            <ScrollView style={{ maxHeight: '72%' }} contentContainerStyle={{ paddingBottom: 12 }}>
-              <View style={[styles.inputGroup, { marginTop: 4 }]}>
-                <Text style={styles.inputLabel}>C.I / RIF</Text>
-                <View style={styles.rifRow}>
-                  <View style={styles.rifPrefixGroup}>
-                    {(['V', 'J'] as const).map((p) => (
-                      <TouchableOpacity
-                        key={p}
-                        style={[styles.rifPrefixButton, rifPrefix === p && styles.rifPrefixButtonActive]}
-                        onPress={() => setRifPrefix(p)}
-                      >
-                        <Text style={[styles.rifPrefixText, rifPrefix === p && styles.rifPrefixTextActive]}>{p}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <TextInput
-                    style={[styles.input, { flex: 1 }]}
-                    placeholder="C.I. o RIF sin guiones"
-                    value={rifNumber}
-                    onChangeText={(t) => setRifNumber(t.replace(/[^0-9]/g, ''))}
-                    keyboardType="numeric"
-                    autoCapitalize="none"
-                    placeholderTextColor={colors.textSecondary}
-                  />
-                </View>
-                {rifNumber ? (
-                  <Text style={[styles.helperText, { marginTop: 6 }]}>
-                    {clientesMap[clienteIdPreview]?.nombre ? `Cliente registrado: ${clientesMap[clienteIdPreview]?.nombre}` : 'No coincide con cliente registrado (se guardará como externo).'}
-                  </Text>
-                ) : null}
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Nombre</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nombre o razón social"
-                  value={nombreExterna}
-                  onChangeText={setNombreExterna}
-                  placeholderTextColor={colors.textSecondary}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Dirección</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Dirección fiscal o de entrega"
-                  value={direccionExterna}
-                  onChangeText={setDireccionExterna}
-                  placeholderTextColor={colors.textSecondary}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Descripción</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Detalle del servicio o producto"
-                  value={descExterna}
-                  onChangeText={setDescExterna}
-                  placeholderTextColor={colors.textSecondary}
-                />
-              </View>
-
-              <View style={styles.filtersRow}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Teléfono</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Ej: 0414-0000000"
-                    value={telefonoExterna}
-                    onChangeText={setTelefonoExterna}
-                    keyboardType="phone-pad"
-                    placeholderTextColor={colors.textSecondary}
-                  />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Correo</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="correo@ejemplo.com"
-                    value={correoExterna}
-                    onChangeText={setCorreoExterna}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    placeholderTextColor={colors.textSecondary}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.filtersRow}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Cantidad</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="1"
-                    value={cantExterna}
-                    onChangeText={setCantExterna}
-                    keyboardType="numeric"
-                    placeholderTextColor={colors.textSecondary}
-                  />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Precio unitario</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="0.00"
-                    value={precioExterna}
-                    onChangeText={setPrecioExterna}
-                    keyboardType="numeric"
-                    placeholderTextColor={colors.textSecondary}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>IVA (%)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder={`IVA (% , default ${ivaPercent})`}
-                  value={ivaExterna}
-                  onChangeText={setIvaExterna}
-                  keyboardType="numeric"
-                  placeholderTextColor={colors.textSecondary}
-                />
-                
-              </View>
-
-              <View style={[styles.filtersRow, { alignItems: 'center', marginBottom: 6 }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Precios incluyen IVA</Text>
-                  <Text style={styles.helperText}>Actívalo si los precios ingresados ya traen IVA incluido.</Text>
-                </View>
-                <Switch
-                  value={preciosIncluyenIvaExterna}
-                  onValueChange={setPreciosIncluyenIvaExterna}
-                  thumbColor={preciosIncluyenIvaExterna ? colors.primary : '#f4f3f4'}
-                  trackColor={{ false: '#d1d5db', true: colors.primaryLight }}
-                />
-              </View>
-
-              <View style={[styles.infoCard, { marginBottom: 6 }]}>
-                <Text style={styles.infoTitle}>Resumen (previo)</Text>
-                {totalsPreview ? (
-                  <>
-                    <View style={styles.infoRow}>
-                      <Text style={styles.infoLabel}>Subtotal</Text>
-                      <Text style={styles.infoValue}>{formatCurrency(totalsPreview.subtotal)}</Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                      <Text style={styles.infoLabel}>IVA</Text>
-                      <Text style={styles.infoValue}>{formatCurrency(totalsPreview.impuestos)}</Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                      <Text style={[styles.infoLabel, { fontWeight: '700' }]}>Total</Text>
-                      <Text style={[styles.infoValue, { fontWeight: '700' }]}>{formatCurrency(totalsPreview.total)}</Text>
-                    </View>
-                  </>
-                ) : (
-                  <Text style={styles.text}>Ingresa cantidad, precio e IVA para ver el cálculo.</Text>
-                )}
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Notas</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Notas internas (opcional)"
-                  value={notaExterna}
-                  onChangeText={setNotaExterna}
-                  multiline
-                  placeholderTextColor={colors.textSecondary}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>PDF URL (opcional)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="https://..."
-                  value={pdfUrl}
-                  onChangeText={setPdfUrl}
-                  autoCapitalize="none"
-                  placeholderTextColor={colors.textSecondary}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>XML URL (opcional)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="https://..."
-                  value={xmlUrl}
-                  onChangeText={setXmlUrl}
-                  autoCapitalize="none"
-                  placeholderTextColor={colors.textSecondary}
-                />
-              </View>
-            </ScrollView>
-
-            <View style={[styles.modalActions, { justifyContent: 'space-between' }]}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={() => setModalCrearExterna(false)}>
-                <Text style={styles.secondaryButtonText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={handleCrearExterna}
-              >
-                <Text style={styles.primaryButtonText}>Crear</Text>
-              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -1632,9 +1402,9 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalCardWide: {
-    width: '90%',
+    width: '100%',
     maxWidth: 960,
-    maxHeight: '85%',
+    maxHeight: '90%',
     backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 18,

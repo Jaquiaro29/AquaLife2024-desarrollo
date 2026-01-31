@@ -63,7 +63,6 @@ const PedidosScreen = () => {
   const [editWithHandle, setEditWithHandle] = useState(0);
   const [editWithoutHandle, setEditWithoutHandle] = useState(0);
   const [editComments, setEditComments] = useState('');
-  const [editPaidAmount, setEditPaidAmount] = useState('');
 
   const [saving, setSaving] = useState(false);
 
@@ -279,7 +278,7 @@ const PedidosScreen = () => {
     >
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Mis Pedidos</Text>
+          <Text style={styles.title}>Panel Principal </Text>
           <Text style={styles.subtitle}>{pedidos.length} pedido{pedidos.length !== 1 ? 's' : ''} en total</Text>
         </View>
         <View style={styles.statsContainer}>
@@ -522,7 +521,11 @@ const PedidosScreen = () => {
                 <View style={styles.actionBar}>
                   {(() => {
                     const isFinal = ['listo', 'entregado', 'completado'].includes(selectedPedido.estado);
-                    const canEdit = !isFinal && selectedPedido.estado !== 'cancelado';
+                    const canEdit =
+                      !isFinal &&
+                      selectedPedido.estado !== 'cancelado' &&
+                      selectedPedido.estadoFinanciero !== 'por_confirmar_pago' &&
+                      selectedPedido.estadoFinanciero !== 'cobrado';
                     const isPaid =
                       selectedPedido.estadoFinanciero === 'cobrado' ||
                       selectedPedido.estadoFinanciero === 'por_confirmar_pago';
@@ -537,9 +540,6 @@ const PedidosScreen = () => {
                               setEditWithHandle(selectedPedido.cantidadConAsa);
                               setEditWithoutHandle(selectedPedido.cantidadSinAsa);
                               setEditComments(selectedPedido.observaciones || '');
-                              setEditPaidAmount(
-                                typeof selectedPedido.montoPagado === 'number' ? String(selectedPedido.montoPagado) : ''
-                              );
                               setEditModalVisible(true);
                             }}
                           >
@@ -616,16 +616,6 @@ const PedidosScreen = () => {
                 />
               </View>
               <View style={{ marginTop: 10 }}>
-                <Text style={styles.modalLabel}>Monto pagado (opcional)</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="decimal-pad"
-                  value={editPaidAmount}
-                  onChangeText={(t) => setEditPaidAmount(t.replace(/[^0-9.,]/g, '').replace(',', '.'))}
-                  placeholder="Ej: 12.50"
-                />
-              </View>
-              <View style={{ marginTop: 10 }}>
                 <Text style={styles.modalLabel}>Observaciones</Text>
                 <TextInput style={styles.input} value={editComments} onChangeText={setEditComments} />
               </View>
@@ -648,12 +638,6 @@ const PedidosScreen = () => {
                         total,
                         updatedAt: serverTimestamp(),
                       };
-                      if (editPaidAmount.trim() !== '') {
-                        const parsed = parseFloat(editPaidAmount);
-                        if (!Number.isNaN(parsed)) {
-                          payload.montoPagado = parsed;
-                        }
-                      }
                       await updateDoc(doc(db, 'Pedidos', selectedPedido.id), payload);
                       setEditModalVisible(false);
                     } catch (e) {

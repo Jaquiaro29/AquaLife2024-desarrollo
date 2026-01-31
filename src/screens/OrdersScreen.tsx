@@ -104,24 +104,13 @@ const OrderScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   useEffect(() => {
     const fetchDolarRate = async () => {
       try {
-        const response = await fetch("http://127.0.0.1:5000/api/tasa");
-        if (!response.ok) {
-          throw new Error("Error en la respuesta de la API");
+        // Solo usar la fuente externa permitida para evitar solicitudes a red local
+        const res = await getBcvUsdRate();
+        if (res.rate) {
+          setDolarRate(res.rate);
         }
-        const data = await response.json();
-        console.log("API Response:", data);
-        setDolarRate(data.tasa);
-      } catch (error) {
-        console.error("Error fetching dolar rate:", error);
-        // Fallback: intentar obtener tasa desde BCV
-        try {
-          const res = await getBcvUsdRate();
-          if (res.rate) {
-            setDolarRate(res.rate);
-          }
-        } catch (e) {
-          console.error('Fallback BCV failed:', e);
-        }
+      } catch (e) {
+        console.error('Error fetching dolar rate:', e);
       }
     };
 
