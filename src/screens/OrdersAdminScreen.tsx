@@ -1006,8 +1006,8 @@ const OrdersAdminScreen = () => {
   const detailMostrarBotonListo = detailOrder?.estado === 'pendiente';
   const detailMostrarBotonEntregado = detailOrder?.estado === 'listo';
   const detailCanConfirmPago = detailEstadoFinanciero === 'por_confirmar_pago' && !detailFinCancelado;
-  // Por ahora, para pedidos de clientes solo se permite confirmar pago (registrar cobro queda deshabilitado).
-  const detailDisableRegistrarCobro = !detailCanConfirmPago;
+  const detailCanRegisterPago = (detailEstadoFinanciero === 'por_cobrar' || detailEstadoFinanciero === 'por_confirmar_pago') && !detailFinCancelado;
+  const detailDisableRegistrarCobro = !detailCanRegisterPago;
 
   useEffect(() => {
     if (!detailOrder) return;
@@ -1058,15 +1058,19 @@ const OrdersAdminScreen = () => {
     try {
       const pedidoRef = doc(db, 'Pedidos', detailOrder.id);
       const isConfirmingPayment = detailEstadoFinanciero === 'por_confirmar_pago';
+      const nextEstadoFinanciero: EstadoFinanciero = 'pagado';
+      const isCash = cobroForm.metodo === 'efectivo';
+      const refPago = isCash ? '' : cobroForm.ref.trim();
+      const bancoEmisor = isCash ? '' : cobroForm.banco.trim();
       await updateDoc(pedidoRef, {
-        estadoFinanciero: isConfirmingPayment ? 'pagado' : 'cobrado',
+        estadoFinanciero: nextEstadoFinanciero,
         montoCobrado: isConfirmingPayment ? detailOrder.montoCobrado ?? 0 : montoNumber,
         fechaCobrado: isConfirmingPayment ? detailOrder.fechaCobrado ?? null : serverTimestamp(),
         montoPagado: isConfirmingPayment ? montoNumber : detailOrder.montoPagado ?? 0,
         fechaPagado: isConfirmingPayment ? serverTimestamp() : detailOrder.fechaPagado ?? null,
         fechaRefPago: serverTimestamp(),
-        refPagoUlt6: cobroForm.ref.trim(),
-        bancoEmisor: cobroForm.banco.trim(),
+        refPagoUlt6: refPago,
+        bancoEmisor,
         metodoPago: cobroForm.metodo,
       });
       setShowCobroForm(false);
@@ -1444,7 +1448,7 @@ const OrdersAdminScreen = () => {
                   {showCobroForm && (
                     <View style={styles.detailBlock}>
                       <Text style={styles.detailBlockTitle}>
-                        {detailEstadoFinanciero === 'por_confirmar_pago' ? 'Confirmar pago' : 'Registrar cobro'}
+                        {detailEstadoFinanciero === 'por_confirmar_pago' ? 'Confirmar pago' : 'Registrar pago'}
                       </Text>
                       <View style={styles.detailFormRow}>
                         <Text style={styles.detailLabel}>Método</Text>
@@ -1469,42 +1473,44 @@ const OrdersAdminScreen = () => {
                           onChangeText={(t) => setCobroForm((prev) => ({ ...prev, ref: t }))}
                         />
                       )}
-                      <View style={styles.detailFormRow}>
-                        <Text style={styles.detailLabel}>Banco</Text>
-                        <TouchableOpacity
-                          style={styles.detailBankSelector}
-                          onPress={() => setShowBankDropdown((prev) => !prev)}
-                        >
-                          <Text style={styles.detailBankSelectorText} numberOfLines={1}>
-                            {cobroForm.banco || 'Selecciona un banco'}
-                          </Text>
-                          <Ionicons
-                            name={showBankDropdown ? 'chevron-up' : 'chevron-down'}
-                            size={18}
-                            color={colors.textSecondary}
-                          />
-                        </TouchableOpacity>
-                        {showBankDropdown && (
-                          <View style={styles.detailBankList}>
-                            <ScrollView style={{ maxHeight: 200 }}>
-                              {VE_BANKS.map((banco) => (
-                                <TouchableOpacity
-                                  key={banco.code}
-                                  style={[styles.detailBankItem, cobroForm.banco === banco.name && styles.detailBankItemActive]}
-                                  onPress={() => {
-                                    setCobroForm((prev) => ({ ...prev, banco: banco.name }));
-                                    setShowBankDropdown(false);
-                                  }}
-                                >
-                                  <Text style={[styles.detailBankText, cobroForm.banco === banco.name && styles.detailBankTextActive]}>
-                                    {banco.name}
-                                  </Text>
-                                </TouchableOpacity>
-                              ))}
-                            </ScrollView>
-                          </View>
-                        )}
-                      </View>
+                      {cobroForm.metodo !== 'efectivo' && (
+                        <View style={styles.detailFormRow}>
+                          <Text style={styles.detailLabel}>Banco</Text>
+                          <TouchableOpacity
+                            style={styles.detailBankSelector}
+                            onPress={() => setShowBankDropdown((prev) => !prev)}
+                          >
+                            <Text style={styles.detailBankSelectorText} numberOfLines={1}>
+                              {cobroForm.banco || 'Selecciona un banco'}
+                            </Text>
+                            <Ionicons
+                              name={showBankDropdown ? 'chevron-up' : 'chevron-down'}
+                              size={18}
+                              color={colors.textSecondary}
+                            />
+                          </TouchableOpacity>
+                          {showBankDropdown && (
+                            <View style={styles.detailBankList}>
+                              <ScrollView style={{ maxHeight: 200 }}>
+                                {VE_BANKS.map((banco) => (
+                                  <TouchableOpacity
+                                    key={banco.code}
+                                    style={[styles.detailBankItem, cobroForm.banco === banco.name && styles.detailBankItemActive]}
+                                    onPress={() => {
+                                      setCobroForm((prev) => ({ ...prev, banco: banco.name }));
+                                      setShowBankDropdown(false);
+                                    }}
+                                  >
+                                    <Text style={[styles.detailBankText, cobroForm.banco === banco.name && styles.detailBankTextActive]}>
+                                      {banco.name}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </ScrollView>
+                            </View>
+                          )}
+                        </View>
+                      )}
                       <TextInput
                         style={styles.detailInput}
                         placeholder="Monto recibido"
@@ -1570,7 +1576,7 @@ const OrdersAdminScreen = () => {
                           { color: detailDisableRegistrarCobro || detailDisableCobrado ? colors.textSecondary : colors.primary },
                         ]}
                       >
-                        {detailEstadoFinanciero === 'por_confirmar_pago' ? 'Confirmar pago' : 'Registrar cobro'}
+                        {detailEstadoFinanciero === 'por_confirmar_pago' ? 'Confirmar pago' : 'Registrar pago'}
                       </Text>
                     </TouchableOpacity>
                     {detailEstadoFinanciero === 'por_confirmar_pago' && (
