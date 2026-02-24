@@ -23,6 +23,7 @@ import {
   setDoc,
   deleteDoc,
   updateDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import {
   getAuth,
@@ -100,6 +101,7 @@ interface BaseUserDoc {
   password?: string;
   tipo?: string;
   activo?: boolean;
+  createdAt?: any;
 }
 
 type UsuarioDoc = BaseUserDoc;
@@ -186,6 +188,7 @@ const CreateUserScreen = () => {
   const [editEmail, setEditEmail] = useState('');
   const [editActivo, setEditActivo] = useState(true);
   const [editCedula, setEditCedula] = useState('');
+  const [editCreatedAt, setEditCreatedAt] = useState<any>(null);
   const [editTipo, setEditTipo] = useState<'usuario' | 'cliente'>('cliente');
   const [changePassword, setChangePassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -515,6 +518,7 @@ const CreateUserScreen = () => {
         password,
         tipo: valorTipo,
         activo: true,
+        createdAt: serverTimestamp(),
       });
 
       showToast('success', `Se creó un ${valorTipo} correctamente en Auth y Firestore.`);
@@ -627,6 +631,7 @@ const CreateUserScreen = () => {
     setEditEmail(sanitizeEmail(itemToEdit.email || ''));
     setEditActivo(itemToEdit.activo !== false);
     setEditCedula(itemToEdit.cedula || '');
+    setEditCreatedAt(itemToEdit.createdAt ?? null);
     setEditTipo(selectedItem.type === 'usuario' ? 'usuario' : 'cliente');
     setChangePassword(false);
     setNewPassword('');
@@ -670,6 +675,7 @@ const CreateUserScreen = () => {
         await setDoc(doc(db, targetCol, selectedItem.id), {
           ...updatePayload,
           tipo: targetTipo,
+          createdAt: editCreatedAt ?? serverTimestamp(),
         });
         await deleteDoc(doc(db, sourceCol, selectedItem.id));
       } else {
@@ -1475,7 +1481,7 @@ const CreateUserScreen = () => {
                 color={activeTab === 'admins' ? colors.textInverse : colors.secondary} 
               />
               <Text style={[styles.tabText, activeTab === 'admins' && styles.tabTextActive]}>
-                Admins ({listaUsuarios.length})
+                Administradores ({listaUsuarios.length})
               </Text>
             </TouchableOpacity>
 

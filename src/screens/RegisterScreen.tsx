@@ -22,6 +22,7 @@ import {
   getDocs,
   setDoc,
   doc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import Toast from 'react-native-toast-message';
 import Icon from 'react-native-vector-icons/FontAwesome';
@@ -180,6 +181,7 @@ const RegisterScreen = ({ navigation }: any) => {
         email: normalizedEmail,
         tipo: 'cliente',
         activo: true,
+        createdAt: serverTimestamp(),
       });
 
       showToast('success', 'Registro exitoso.');

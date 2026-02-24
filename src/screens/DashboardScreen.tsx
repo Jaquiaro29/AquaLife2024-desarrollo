@@ -78,6 +78,9 @@ const DashboardScreen = () => {
   const isSmallScreen = width < 420;
   const [userCount, setUserCount] = useState(0);
   const [clientCount, setClientCount] = useState(0);
+  const [clientGrowthPct, setClientGrowthPct] = useState<number | null>(null);
+  const [adminNewCount, setAdminNewCount] = useState<number | null>(null);
+  const [adminGrowthPct, setAdminGrowthPct] = useState<number | null>(null);
   const [userData, setUserData] = useState({
     nombre: '',
     correo: '',
@@ -261,14 +264,47 @@ const DashboardScreen = () => {
     setBotellonPriceHigh(priceHighFromConfig ?? null);
   }, [priceFromConfig, priceHighFromConfig]);
 
+  const getDocCreatedTime = (docSnap: any): Date | null => {
+    const data = docSnap.data ? docSnap.data() : {};
+    const createdAt = data?.createdAt || data?.fechaCreacion;
+    if (createdAt?.toDate) return createdAt.toDate();
+    if (createdAt?.seconds) return new Date(createdAt.seconds * 1000);
+    if (docSnap?.createTime?.toDate) return docSnap.createTime.toDate();
+    return null;
+  };
+
+  const calcMonthCounts = (docs: any[]) => {
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+    const prevMonthEnd = currentMonthStart - 1;
+    let cur = 0;
+    let prev = 0;
+    docs.forEach((docSnap) => {
+      const created = getDocCreatedTime(docSnap);
+      if (!created) return;
+      const t = created.getTime();
+      if (t >= currentMonthStart) cur += 1;
+      else if (t >= prevMonthStart && t <= prevMonthEnd) prev += 1;
+    });
+    return { cur, prev };
+  };
+
   // Listener en tiempo real para usuarios y clientes
   useEffect(() => {
     const unsubscribeUsers = onSnapshot(collection(db, 'usuarios'), (snapshot) => {
       setUserCount(snapshot.size);
+      const { cur, prev } = calcMonthCounts(snapshot.docs);
+      setAdminNewCount(cur);
+      const growth = prev > 0 ? ((cur - prev) / prev) * 100 : cur > 0 ? 100 : 0;
+      setAdminGrowthPct(prev === 0 && cur === 0 ? null : growth);
     });
 
     const unsubscribeClients = onSnapshot(collection(db, 'Clientes'), (snapshot) => {
       setClientCount(snapshot.size);
+      const { cur, prev } = calcMonthCounts(snapshot.docs);
+      const growth = prev > 0 ? ((cur - prev) / prev) * 100 : cur > 0 ? 100 : 0;
+      setClientGrowthPct(prev === 0 && cur === 0 ? null : growth);
     });
 
     // Simular carga de datos
@@ -888,7 +924,11 @@ const DashboardScreen = () => {
               </View>
               <Text style={styles.cardTitle}>Clientes</Text>
               <Text style={styles.cardValue}>{clientCount}</Text>
-              <Text style={styles.cardChange}>+5% este mes</Text>
+              <Text style={styles.cardChange}>
+                {clientGrowthPct !== null
+                  ? `${clientGrowthPct >= 0 ? '+' : ''}${clientGrowthPct.toFixed(1)}% este mes`
+                  : 'Sin datos'}
+              </Text>
             </LinearGradient>
 
             <LinearGradient
@@ -900,9 +940,13 @@ const DashboardScreen = () => {
               <View style={styles.cardIconContainer}>
                 <FontAwesome5 name="users" size={24} color="#fff" />
               </View>
-              <Text style={styles.cardTitle}>Usuarios</Text>
+              <Text style={styles.cardTitle}>Administradores</Text>
               <Text style={styles.cardValue}>{userCount}</Text>
-              <Text style={styles.cardChange}>+2 este mes</Text>
+              <Text style={styles.cardChange}>
+                {adminGrowthPct !== null
+                  ? `${adminGrowthPct >= 0 ? '+' : ''}${adminGrowthPct.toFixed(1)}% este mes`
+                  : 'Sin datos'}
+              </Text>
             </LinearGradient>
 
             <LinearGradient
