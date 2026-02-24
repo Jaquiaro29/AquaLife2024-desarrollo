@@ -61,6 +61,12 @@ const RegisterScreen = ({ navigation }: any) => {
   const nameRegex = /^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/;
   const phoneRegex = /^[0-9]+$/;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const sanitizeName = (value: string) => value.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g, '').replace(/\s{2,}/g, ' ').trimStart();
+  const sanitizePhone = (value: string) => value.replace(/\D/g, '');
+  const sanitizeCedula = (value: string) => value.replace(/\D/g, '');
+  const sanitizeAddress = (value: string) => value.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s]/g, '').replace(/\s{2,}/g, ' ').trimStart();
+  const sanitizeEmail = (value: string) => value.replace(/[^A-Za-z0-9@.]/g, '').toLowerCase();
+  const sanitizePassword = (value: string) => value.replace(/[^A-Za-z\d!@#$%^&*()_\-+=]/g, '');
 
   // ==================== Función para medir seguridad de la pass ====================
   function getPasswordStrength(pw: string): string {
@@ -247,7 +253,7 @@ const RegisterScreen = ({ navigation }: any) => {
             placeholder="Nombre completo"
             placeholderTextColor={colors.textTertiary}
             value={name}
-            onChangeText={setName}
+            onChangeText={(value) => setName(sanitizeName(value))}
           />
 
           {/* CÉDULA */}
@@ -256,7 +262,7 @@ const RegisterScreen = ({ navigation }: any) => {
             placeholder="Cédula"
             placeholderTextColor={colors.textTertiary}
             value={cedula}
-            onChangeText={setCedula}
+            onChangeText={(value) => setCedula(sanitizeCedula(value))}
             keyboardType="numeric"
           />
 
@@ -266,7 +272,7 @@ const RegisterScreen = ({ navigation }: any) => {
             placeholder="Teléfono"
             placeholderTextColor={colors.textTertiary}
             value={telefono}
-            onChangeText={setTelefono}
+            onChangeText={(value) => setTelefono(sanitizePhone(value))}
             keyboardType="phone-pad"
           />
 
@@ -276,7 +282,7 @@ const RegisterScreen = ({ navigation }: any) => {
             placeholder="Dirección"
             placeholderTextColor={colors.textTertiary}
             value={direccion}
-            onChangeText={setDireccion}
+            onChangeText={(value) => setDireccion(sanitizeAddress(value))}
           />
 
           {/* EMAIL */}
@@ -286,7 +292,7 @@ const RegisterScreen = ({ navigation }: any) => {
             placeholderTextColor={colors.textTertiary}
             keyboardType="email-address"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(value) => setEmail(sanitizeEmail(value))}
             autoCapitalize="none"
           />
 
@@ -298,7 +304,7 @@ const RegisterScreen = ({ navigation }: any) => {
               placeholderTextColor={colors.textTertiary}
               secureTextEntry={!showPass}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(value) => setPassword(sanitizePassword(value))}
             />
             <TouchableOpacity
               style={styles.eyeButton}
@@ -318,7 +324,7 @@ const RegisterScreen = ({ navigation }: any) => {
               placeholderTextColor="#888888"
               secureTextEntry={!showPassConfirm}
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={(value) => setConfirmPassword(sanitizePassword(value))}
             />
             <TouchableOpacity
               style={styles.eyeButton}
