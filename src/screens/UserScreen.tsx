@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { getAuth, deleteUser, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { db } from '../../firebaseConfig';
-import { doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, query, updateDoc, deleteDoc, where } from 'firebase/firestore';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types/navigation';
 
@@ -35,6 +35,7 @@ const PerfilUsuarioScreen = ({ navigation }: Props) => {
   const [editing, setEditing] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
+  const [stats, setStats] = useState({ total: 0, pendientes: 0, completados: 0 });
 
   // Efecto para cargar datos del usuario desde Firestore
   useEffect(() => {
@@ -60,6 +61,27 @@ const PerfilUsuarioScreen = ({ navigation }: Props) => {
     };
 
     fetchUserData();
+  }, []);
+
+  // Cargar actividad real del usuario (pedidos)
+  useEffect(() => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const pedidosRef = collection(db, 'Pedidos');
+    const q = query(pedidosRef, where('clienteId', '==', user.uid));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const pedidosData = snapshot.docs.map((docu) => docu.data() as { estado?: string });
+      const total = pedidosData.length;
+      const pendientes = pedidosData.filter((p) => p.estado === 'pendiente' || p.estado === 'procesando').length;
+      const completados = pedidosData.filter(
+        (p) => p.estado === 'listo' || p.estado === 'entregado' || p.estado === 'completado'
+      ).length;
+      setStats({ total, pendientes, completados });
+    });
+
+    return () => unsub();
   }, []);
 
   // Función para guardar los datos actualizados del usuario
@@ -262,15 +284,15 @@ const PerfilUsuarioScreen = ({ navigation }: Props) => {
           <Text style={styles.sectionTitle}>📊 Mi Actividad</Text>
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>12</Text>
+              <Text style={styles.statNumber}>{stats.total}</Text>
               <Text style={styles.statLabel}>Pedidos Totales</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>3</Text>
+              <Text style={styles.statNumber}>{stats.pendientes}</Text>
               <Text style={styles.statLabel}>Pendientes</Text>
             </View>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>9</Text>
+              <Text style={styles.statNumber}>{stats.completados}</Text>
               <Text style={styles.statLabel}>Completados</Text>
             </View>
           </View>

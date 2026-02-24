@@ -62,8 +62,8 @@ const RegisterScreen = ({ navigation }: any) => {
   const phoneRegex = /^[0-9]+$/;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const sanitizeName = (value: string) => value.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]/g, '').replace(/\s{2,}/g, ' ').trimStart();
-  const sanitizePhone = (value: string) => value.replace(/\D/g, '');
-  const sanitizeCedula = (value: string) => value.replace(/\D/g, '');
+  const sanitizePhone = (value: string) => value.replace(/\D/g, '').slice(0, 11);
+  const sanitizeCedula = (value: string) => value.replace(/\D/g, '').slice(0, 8);
   const sanitizeAddress = (value: string) => value.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9\s]/g, '').replace(/\s{2,}/g, ' ').trimStart();
   const sanitizeEmail = (value: string) => value.replace(/[^A-Za-z0-9@.]/g, '').toLowerCase();
   const sanitizePassword = (value: string) => value.replace(/[^A-Za-z\d!@#$%^&*()_\-+=]/g, '');
